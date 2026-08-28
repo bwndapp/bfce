@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/logo.png" alt="" width="88">
+
 # bfce
 
 **A small, friendly face you can drop into a web page.**
@@ -193,6 +195,17 @@ every field and its units. Two things learned the hard way:
 - **Distinguish moods by shape, not amount.** `happy` and `joy` started as the
   same dome at two sizes and read as one mood. `joy` only became its own thing
   once both lids came in and made it a crescent.
+
+## Brand assets
+
+| file | |
+|---|---|
+| [`docs/logo.svg`](docs/logo.svg) | the mark — one path, eyes punched out with `evenodd`, fills with `currentColor` |
+| [`docs/logo.png`](docs/logo.png) | 1024×1024 square icon, for avatars |
+| [`docs/logotype.png`](docs/logotype.png) | horizontal lockup, mark + wordmark |
+
+The SVG takes any colour and needs no background to read — but `currentColor`
+only resolves when it's inlined, not loaded through an `<img>`.
 
 ## Credits
 

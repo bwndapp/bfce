@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100" role="img" aria-label="bfce">
+  <!-- One path, eyes punched out with evenodd — so the mark is a single shape
+       that takes any fill and needs no background to read. Same geometry as
+       favicon.svg, so the tab icon and the logo are the same mark. -->
+  <path
+    fill="currentColor"
+    fill-rule="evenodd"
+    d="M 0,-48 A 48,48 0 1,1 0,48 A 48,48 0 1,1 0,-48 Z
+       M -18,-16 A 13,13 0 1,1 -18,10 A 13,13 0 1,1 -18,-16 Z
+       M 18,-16 A 13,13 0 1,1 18,10 A 13,13 0 1,1 18,-16 Z" />
+</svg>
