@@ -1,7 +1,7 @@
 {
   "name": "bwnd-face",
   "version": "0.1.0",
-  "description": "A circle, and two circles inside it that follow your pointer. Eyes on a sphere, 3.7 kB, no dependencies.",
+  "description": "A small, friendly animated face for web pages. Eyes that follow your cursor, 11 moods, 9 reactions. 3.7 kB, no dependencies.",
   "type": "module",
   "license": "MIT",
   "main": "./src/index.js",
@@ -11,8 +11,15 @@
     "./expressions": "./src/expressions.js",
     "./face.css": "./src/face.css"
   },
-  "files": ["src", "dist", "README.md", "LICENSE"],
-  "sideEffects": ["*.css"],
+  "files": [
+    "src",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "*.css"
+  ],
   "scripts": {
     "build": "node build.mjs",
     "demo": "npx --yes http-server . -p 8080 -c-1"
@@ -21,12 +28,23 @@
     "react": ">=17"
   },
   "peerDependenciesMeta": {
-    "react": { "optional": true }
+    "react": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "esbuild": "^0.24.0"
   },
-  "keywords": ["face", "eyes", "svg", "animation", "cursor", "mouse", "avatar", "spring"],
+  "keywords": [
+    "face",
+    "eyes",
+    "svg",
+    "animation",
+    "cursor",
+    "mouse",
+    "avatar",
+    "spring"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bwndapp/face.git"

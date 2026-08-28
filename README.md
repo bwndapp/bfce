@@ -1,11 +1,11 @@
 # face
 
-A circle, and two circles inside it that follow your pointer.
+A small, friendly face you can drop into a web page. It follows your cursor,
+blinks on its own, and glances around when you leave it alone.
 
 The head is a sphere — the eyes sit on its surface, so they travel a curved path
-and foreshorten toward the rim instead of sliding around a flat disc. 11
-expressions, 9 reactions, involuntary blinking, and it glances around on its own
-when you leave it alone.
+and foreshorten toward the rim instead of sliding around a flat disc. Eleven
+moods, nine one-shot reactions.
 
 **3.7 kB gzipped. No dependencies.** React wrapper included, not required.
 
