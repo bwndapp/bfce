@@ -313,10 +313,13 @@ export function createFace(host, options = {}) {
     }
     seenAt = now
 
+    // A mood can bias where the eyes rest, on top of whatever they're tracking.
+    // That's what lets `bored` look away and `thinking` look up — clamped past 1
+    // because features are clipped to the silhouette and can't escape it.
     const target = aim(now)
     const strength = shape.track.x
-    gaze.x.to = target.x * strength
-    gaze.y.to = target.y * strength
+    gaze.x.to = clamp(target.x * strength + shape.gazeX.x, -1.15, 1.15)
+    gaze.y.to = clamp(target.y * strength + shape.gazeY.x, -1.15, 1.15)
     const gx = advance(gaze.x, dt)
     const gy = advance(gaze.y, dt)
     for (const key in shape) advance(shape[key], dt)
@@ -365,8 +368,11 @@ export function createFace(host, options = {}) {
       // Only the right eye takes the skew — a face with both lids at the same
       // height can't look sceptical, it just looks tired.
       const lidTop = clamp(lidT + (eye.side > 0 ? shape.lidSkew.x : 0), 0, 1)
-      const sx = scale
-      const sy = scale * shape.squashY.x * (1 - shut * 0.94)
+      // Size skew is the other half of the asymmetry — two eyes at slightly
+      // different sizes is what reads as puzzled rather than merely tired.
+      const skewed = scale * (eye.side > 0 ? 1 + shape.scaleSkew.x : 1)
+      const sx = skewed
+      const sy = skewed * shape.squashY.x * (1 - shut * 0.94)
 
       const p = project(
         eye.side * G.eyeX * shape.gap.x,
