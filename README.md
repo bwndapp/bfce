@@ -17,6 +17,24 @@ npm run demo    # then open http://localhost:8080/demo/
 
 ## Install
 
+### Nothing to install
+
+The built bundle is served straight off the repo by jsDelivr, styles included:
+
+```html
+<div id="bot" style="width:160px;height:160px"></div>
+
+<script type="module">
+  import { createFace } from 'https://cdn.jsdelivr.net/gh/bwndapp/face@main/dist/face.js'
+
+  createFace(document.querySelector('#bot'), { expression: 'curious' })
+</script>
+```
+
+Pin a tag instead of `@main` if you'd rather not track changes.
+
+### Into your project
+
 There is no npm package yet. Copy the source in — it's five files.
 
 ```bash
