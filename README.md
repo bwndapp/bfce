@@ -37,7 +37,7 @@ container with no size renders nothing.
 Mirrored on jsDelivr if you'd rather pin a tag than track latest:
 
 ```js
-import { createFace } from 'https://cdn.jsdelivr.net/gh/bwndapp/face@main/dist/face.js'
+import { createFace } from 'https://cdn.jsdelivr.net/gh/bwndapp/bfce@main/dist/face.js'
 ```
 
 Live demo and agent-readable docs: [bfce.bwnd.app](https://bfce.bwnd.app) ·
@@ -50,7 +50,7 @@ There is no npm package yet. Copy the source in — it's five files.
 ```bash
 # in your project
 mkdir -p src/face
-curl -L https://github.com/bwndapp/face/archive/refs/heads/main.tar.gz \
+curl -L https://github.com/bwndapp/bfce/archive/refs/heads/main.tar.gz \
   | tar -xz --strip-components=2 -C src/face face-main/src
 ```
 
