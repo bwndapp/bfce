@@ -1,4 +1,4 @@
-# face
+# bfce
 
 A small, friendly face you can drop into a web page. It follows your cursor,
 blinks on its own, and glances around when you leave it alone.

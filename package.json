@@ -1,5 +1,5 @@
 {
-  "name": "bwnd-face",
+  "name": "bfce",
   "version": "0.1.0",
   "description": "A small, friendly animated face for web pages. Eyes that follow your cursor, 11 moods, 9 reactions. 3.7 kB, no dependencies.",
   "type": "module",
