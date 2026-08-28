@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>face — a circle that watches you</title>
+<link rel="stylesheet" href="../src/face.css">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #000; --surface: #0b0b0c; --line: #232427; --line-strong: #34363a;
+    --fg: #e9ebec; --muted: #85898e; --faint: #55595e;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #fff; --surface: #fbfbfc; --line: #e4e6e8; --line-strong: #cfd2d5;
+      --fg: #0d0f11; --muted: #62676c; --faint: #8d9298;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: clamp(3rem, 10vh, 7rem) clamp(1.25rem, 4vw, 2.5rem); }
+  h1 { font-size: clamp(2.25rem, 6vw, 4rem); letter-spacing: -0.03em; margin: 0 0 1rem; }
+  h2 { font-size: 1.25rem; letter-spacing: -0.02em; margin: 0 0 1.5rem; }
+  p { color: var(--muted); margin: 0; }
+  .eyebrow {
+    font-size: .75rem; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--faint); margin-bottom: .5rem;
+  }
+  .hero { display: grid; justify-items: center; text-align: center; gap: 2rem; }
+  .hero p { max-width: 32ch; }
+  section { padding-top: clamp(3rem, 8vw, 5rem); margin-top: clamp(3rem, 8vw, 5rem); border-top: 1px solid var(--line); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: .75rem; }
+  figure {
+    margin: 0; display: grid; justify-items: center; gap: .9rem;
+    padding: 1.5rem 1rem 1.15rem; border: 1px solid var(--line);
+    border-radius: 14px; background: var(--surface);
+  }
+  figcaption { font-size: .875rem; }
+  .face { --face-skin: var(--bg); --face-ink: var(--fg); --face-ring: var(--line-strong); }
+  .stage {
+    display: grid; justify-items: center; gap: 2rem; padding: clamp(2rem, 6vw, 3.5rem);
+    border: 1px solid var(--line); border-radius: 22px; background: var(--surface);
+  }
+  .row { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: center; }
+  button {
+    height: 34px; padding: 0 .95rem; border: 1px solid var(--line-strong);
+    border-radius: 999px; background: transparent; color: var(--fg);
+    font: inherit; font-size: .875rem; cursor: pointer;
+  }
+  button:hover { background: var(--line); }
+  button[aria-pressed="true"] { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+  footer { margin-top: 4rem; color: var(--faint); font-size: .875rem; }
+  a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <div class="hero">
+    <div id="hero" class="face" style="width:220px;height:220px"></div>
+    <div>
+      <h1>A face that watches you.</h1>
+      <p>Two eyes on the surface of a sphere, projected flat. 3.7&nbsp;kB, no dependencies.</p>
+    </div>
+    <div class="row">
+      <button data-hero="bounce">Bounce</button>
+      <button data-hero="wink">Wink</button>
+      <button data-hero="spin">Spin</button>
+    </div>
+  </div>
+
+  <section>
+    <p class="eyebrow">Expressions</p>
+    <h2>Eleven moods, one shape.</h2>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Reactions</p>
+    <h2>One-shot, layered on top.</h2>
+    <div class="stage">
+      <div id="stage" class="face" style="width:168px;height:168px"></div>
+      <div class="row" id="reactions"></div>
+      <div class="row" id="moods"></div>
+    </div>
+  </section>
+
+  <footer>
+    <a href="https://github.com/bwndapp/face">github.com/bwndapp/face</a> · MIT
+  </footer>
+</main>
+
+<script type="module">
+  import { createFace } from '../src/core.js'
+  import { EXPRESSION_NAMES, REACTION_NAMES } from '../src/expressions.js'
+
+  const hero = createFace(document.getElementById('hero'))
+  document.querySelectorAll('[data-hero]').forEach((button) => {
+    button.onclick = () => hero.react(button.dataset.hero)
+  })
+
+  const grid = document.getElementById('grid')
+  for (const name of EXPRESSION_NAMES) {
+    const figure = document.createElement('figure')
+    const host = document.createElement('div')
+    host.className = 'face'
+    host.style.cssText = 'width:92px;height:92px'
+    const caption = document.createElement('figcaption')
+    caption.textContent = name
+    figure.append(host, caption)
+    grid.append(figure)
+    createFace(host, { expression: name })
+  }
+
+  const stage = createFace(document.getElementById('stage'), { mouth: true, pupils: true })
+
+  const reactions = document.getElementById('reactions')
+  for (const name of REACTION_NAMES) {
+    const button = document.createElement('button')
+    button.textContent = name
+    button.onclick = () => stage.react(name)
+    reactions.append(button)
+  }
+
+  const moods = document.getElementById('moods')
+  for (const name of EXPRESSION_NAMES) {
+    const button = document.createElement('button')
+    button.textContent = name
+    button.setAttribute('aria-pressed', String(name === 'idle'))
+    button.onclick = () => {
+      moods.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', 'false'))
+      button.setAttribute('aria-pressed', 'true')
+      stage.setExpression(name)
+    }
+    moods.append(button)
+  }
+</script>
+</body>
+</html>

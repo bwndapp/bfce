@@ -1,0 +1,50 @@
+/* Everything about how a face *looks* is here, driven by four custom
+   properties. Set them on the face or on any ancestor.
+
+     --face-skin   the big circle (and the lids, which have to match)
+     --face-ink    the eyes and mouth
+     --face-ring   optional hairline around the head; transparent by default
+     --face-pupil  inner dot when pupils are on; defaults to --face-skin  */
+
+.bwface {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.bwface .bwf-head {
+  fill: var(--face-skin, #17191c);
+}
+
+.bwface .bwf-ring {
+  fill: none;
+  stroke: var(--face-ring, transparent);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.bwface .bwf-eye {
+  fill: var(--face-ink, #f7f9f9);
+}
+
+/* Lids are cut out of the head colour — they have to match it exactly or the
+   seam shows. */
+.bwface .bwf-lid {
+  fill: var(--face-skin, #17191c);
+}
+
+.bwface .bwf-pupil {
+  fill: var(--face-pupil, var(--face-skin, #17191c));
+}
+
+.bwface .bwf-mouth {
+  fill: none;
+  stroke: var(--face-ink, #f7f9f9);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+}
+
+.bwface .bwf-mouth-open {
+  fill: var(--face-ink, #f7f9f9);
+}
