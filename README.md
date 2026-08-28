@@ -223,6 +223,16 @@ every field and its units. Two things learned the hard way:
   same dome at two sizes and read as one mood. `joy` only became its own thing
   once both lids came in and made it a crescent.
 
+## Credits
+
+The visual language — near-black canvas, hairline borders doing the separating
+instead of shadows, tightly tracked type, fully-round pill buttons — is inspired
+by **X's design system**. The demo site leans on it deliberately.
+
+The face itself is an original implementation. The sphere projection, the lid
+system that produces every expression from a single circle, and the spring model
+were written from scratch for this library.
+
 ## Licence
 
 MIT.
