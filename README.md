@@ -19,19 +19,29 @@ npm run demo    # then open http://localhost:8080/demo/
 
 ### Nothing to install
 
-The built bundle is served straight off the repo by jsDelivr, styles included:
+The built bundle is hosted, styles included — one import, no stylesheet:
 
 ```html
 <div id="bot" style="width:160px;height:160px"></div>
 
 <script type="module">
-  import { createFace } from 'https://cdn.jsdelivr.net/gh/bwndapp/face@main/dist/face.js'
+  import { createFace } from 'https://bfce.bwnd.app/face.js'
 
   createFace(document.querySelector('#bot'), { expression: 'curious' })
 </script>
 ```
 
-Pin a tag instead of `@main` if you'd rather not track changes.
+Give the host element a width and height — the SVG fills its container, so a
+container with no size renders nothing.
+
+Mirrored on jsDelivr if you'd rather pin a tag than track latest:
+
+```js
+import { createFace } from 'https://cdn.jsdelivr.net/gh/bwndapp/face@main/dist/face.js'
+```
+
+Live demo and agent-readable docs: [bfce.bwnd.app](https://bfce.bwnd.app) ·
+[SKILL.md](https://bfce.bwnd.app/SKILL.md) · [llms.txt](https://bfce.bwnd.app/llms.txt)
 
 ### Into your project
 
