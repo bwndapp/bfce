@@ -7,7 +7,7 @@
 **A small, friendly face you can drop into a web page.**
 
 It follows your cursor, blinks on its own, and glances around when you leave it
-alone. Eleven moods, nine one-shot reactions, **3.7 kB gzipped**, no dependencies.
+alone. 22 moods, nine one-shot reactions, **3.7 kB gzipped**, no dependencies.
 
 ### [→ Try it live at bfce.bwnd.app](https://bfce.bwnd.app)
 
@@ -67,7 +67,7 @@ face.current.look(-1, 0, 1200)     // force the gaze left for 1.2s
 
 ## Expressions
 
-<img src="docs/expressions.png" alt="Eleven expressions: idle, happy, joy, surprised, curious, suspicious, focus, sleepy, sad, angry, sleep" width="100%">
+<img src="docs/expressions.png" alt="22 expressions: idle, content, happy, joy, excited, love, surprised, scared, curious, confused, thinking, focus, suspicious, smug, sly, bored, worried, sad, annoyed, angry, sleepy, sleep" width="100%">
 
 ```js
 face.setExpression('sleepy')
