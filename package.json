@@ -1,27 +1,33 @@
 {
-  "name": "bfce",
-  "version": "0.1.0",
-  "description": "A small, friendly animated face for web pages. Eyes that follow your cursor, 11 moods, 9 reactions. 3.7 kB, no dependencies.",
+  "name": "@bwnd/bfce",
+  "version": "0.2.0",
+  "description": "A small, friendly animated face for web pages. Eyes that follow your cursor, 30 moods, 9 reactions. 3.7 kB, no dependencies.",
   "type": "module",
   "license": "MIT",
-  "main": "./src/index.js",
+  "main": "./dist/face.js",
   "exports": {
-    ".": "./src/index.js",
+    ".": "./dist/face.js",
+    "./react": "./dist/react.js",
+    "./face.css": "./dist/face.css",
     "./core": "./src/core.js",
     "./expressions": "./src/expressions.js",
-    "./face.css": "./src/face.css"
+    "./package.json": "./package.json"
   },
   "files": [
-    "src",
     "dist",
+    "src",
     "README.md",
     "LICENSE"
   ],
   "sideEffects": [
     "*.css"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "node build.mjs",
+    "prepublishOnly": "node build.mjs",
     "demo": "npx --yes http-server . -p 8080 -c-1"
   },
   "peerDependencies": {
@@ -43,11 +49,13 @@
     "cursor",
     "mouse",
     "avatar",
-    "spring"
+    "mascot",
+    "spring",
+    "react"
   ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bwndapp/bfce.git"
   },
-  "homepage": "https://github.com/bwndapp/bfce#readme"
+  "homepage": "https://bfce.bwnd.app"
 }

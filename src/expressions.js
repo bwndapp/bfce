@@ -18,22 +18,36 @@
 export const EXPRESSIONS = {
   idle:       { lidT: 0, lidB: 0, lidSkew: 0, scaleSkew: 0, tilt: 0, eyeScale: 1, squashY: 1, gap: 1, eyeY: 0, head: 0, gazeX: 0, gazeY: 0, mouth: 0.1, open: 0, track: 1 },
   content:    { lidT: 0.1, lidB: 0.2, lidSkew: 0, scaleSkew: 0, tilt: 0, eyeScale: 0.96, squashY: 1, gap: 0.98, eyeY: 1, head: 3, gazeX: 0, gazeY: 0.16, mouth: 0.55, open: 0, track: 0.55 },
+  // Sleepy is a top lid drooping; this is the opposite muscle — the eyes squeeze
+  // shut from below, the way they do on an exhale. Same "narrow" amount, other
+  // shape, which is the only way two moods stay apart.
+  relieved:   { lidT: 0, lidB: 0.34, lidSkew: 0, scaleSkew: 0, tilt: -5, eyeScale: 1.06, squashY: 0.72, gap: 0.98, eyeY: 2, head: 9, gazeX: 0, gazeY: 0.12, mouth: 0.62, open: 0.14, track: 0.4 },
   happy:      { lidT: 0, lidB: 0.44, lidSkew: 0, scaleSkew: 0, tilt: 0, eyeScale: 1.06, squashY: 1, gap: 1, eyeY: 1, head: 0, gazeX: 0, gazeY: 0, mouth: 0.85, open: 0, track: 0.85 },
   joy:        { lidT: 0.16, lidB: 0.6, lidSkew: 0, scaleSkew: 0, tilt: 0, eyeScale: 1.22, squashY: 1, gap: 1.05, eyeY: 2, head: 0, gazeX: 0, gazeY: 0, mouth: 1, open: 0.35, track: 0.4 },
   excited:    { lidT: 0, lidB: 0, lidSkew: 0, scaleSkew: 0, tilt: 0, eyeScale: 1.24, squashY: 1, gap: 1.07, eyeY: -2, head: 0, gazeX: 0, gazeY: 0, mouth: 1, open: 0.5, track: 1.25 },
   love:       { lidT: 0, lidB: 0.12, lidSkew: 0, scaleSkew: 0, tilt: 0, eyeScale: 1.26, squashY: 1, gap: 1.02, eyeY: 1, head: 9, gazeX: 0, gazeY: 0.1, mouth: 0.95, open: 0, track: 0.55 },
+  pleading:   { lidT: 0, lidB: 0.16, lidSkew: 0, scaleSkew: 0, tilt: -9, eyeScale: 1.3, squashY: 1, gap: 0.9, eyeY: 1, head: 7, gazeX: 0, gazeY: -0.3, mouth: 0.3, open: 0, track: 0.85 },
+  shy:        { lidT: 0.34, lidB: 0.2, lidSkew: 0.1, scaleSkew: 0, tilt: -6, eyeScale: 0.98, squashY: 1, gap: 0.96, eyeY: 1, head: 12, gazeX: -0.5, gazeY: 0.26, mouth: 0.45, open: 0, track: 0.35 },
   surprised:  { lidT: 0, lidB: 0, lidSkew: 0, scaleSkew: 0, tilt: 0, eyeScale: 1.3, squashY: 1, gap: 1.02, eyeY: -1, head: 0, gazeX: 0, gazeY: 0, mouth: 0, open: 0.95, track: 1 },
   scared:     { lidT: 0.16, lidB: 0.04, lidSkew: 0, scaleSkew: 0, tilt: -22, eyeScale: 1.26, squashY: 1, gap: 0.86, eyeY: -1, head: 0, gazeX: 0, gazeY: 0.12, mouth: -0.6, open: 0.55, track: 1.3 },
   curious:    { lidT: 0, lidB: 0, lidSkew: 0.12, scaleSkew: 0, tilt: 0, eyeScale: 1.08, squashY: 1, gap: 1, eyeY: 0, head: 9, gazeX: 0, gazeY: -0.22, mouth: 0.35, open: 0.1, track: 1 },
   confused:   { lidT: 0, lidB: 0, lidSkew: 0.1, scaleSkew: -0.18, tilt: 0, eyeScale: 1, squashY: 1, gap: 1, eyeY: 0, head: 13, gazeX: 0.22, gazeY: -0.2, mouth: -0.1, open: 0, track: 0.7 },
+  dizzy:      { lidT: 0, lidB: 0, lidSkew: 0, scaleSkew: 0.42, tilt: 0, eyeScale: 1.06, squashY: 1, gap: 1.04, eyeY: 0, head: 13, gazeX: -0.15, gazeY: 0.08, mouth: 0.15, open: 0.32, track: 0.15 },
   thinking:   { lidT: 0.22, lidB: 0, lidSkew: 0, scaleSkew: 0, tilt: 0, eyeScale: 1, squashY: 1, gap: 1, eyeY: 0, head: 6, gazeX: 0.55, gazeY: -0.5, mouth: 0.1, open: 0, track: 0.12 },
   focus:      { lidT: 0.32, lidB: 0.28, lidSkew: 0, scaleSkew: 0, tilt: 0, eyeScale: 1.05, squashY: 1, gap: 0.94, eyeY: 0, head: 0, gazeX: 0, gazeY: 0, mouth: 0, open: 0, track: 1.25 },
   suspicious: { lidT: 0.3, lidB: 0.22, lidSkew: 0.24, scaleSkew: 0, tilt: 6, eyeScale: 1, squashY: 1, gap: 0.96, eyeY: 0, head: -5, gazeX: 0, gazeY: 0, mouth: -0.25, open: 0, track: 1 },
+  unimpressed:{ lidT: 0, lidB: 0, lidSkew: 0, scaleSkew: 0, tilt: 0, eyeScale: 1.04, squashY: 0.42, gap: 1, eyeY: 0, head: 0, gazeX: 0, gazeY: 0, mouth: -0.08, open: 0, track: 0.9 },
   smug:       { lidT: 0.34, lidB: 0, lidSkew: 0.16, scaleSkew: 0, tilt: 8, eyeScale: 1, squashY: 1, gap: 1, eyeY: 0, head: 6, gazeX: 0.38, gazeY: 0, mouth: 0.55, open: 0, track: 0.5 },
   sly:        { lidT: 0.28, lidB: 0.36, lidSkew: 0, scaleSkew: 0, tilt: 7, eyeScale: 1, squashY: 1, gap: 1, eyeY: 0, head: 0, gazeX: 0.42, gazeY: 0, mouth: 0.7, open: 0, track: 0.45 },
   bored:      { lidT: 0.46, lidB: 0, lidSkew: 0, scaleSkew: 0, tilt: 0, eyeScale: 1, squashY: 1, gap: 1, eyeY: 0, head: 4, gazeX: -0.62, gazeY: 0.16, mouth: -0.2, open: 0, track: 0.18 },
+  exasperated:{ lidT: 0.5, lidB: 0, lidSkew: 0, scaleSkew: 0, tilt: 0, eyeScale: 1.02, squashY: 1, gap: 1, eyeY: 0, head: 0, gazeX: 0.1, gazeY: -0.72, mouth: -0.28, open: 0, track: 0.15 },
   worried:    { lidT: 0.22, lidB: 0, lidSkew: 0, scaleSkew: 0, tilt: -14, eyeScale: 1.06, squashY: 1, gap: 0.97, eyeY: 1, head: 0, gazeX: 0, gazeY: 0, mouth: -0.45, open: 0, track: 0.9 },
+  guilty:     { lidT: 0.38, lidB: 0.1, lidSkew: 0, scaleSkew: 0, tilt: -12, eyeScale: 0.96, squashY: 1, gap: 0.97, eyeY: 2, head: -8, gazeX: -0.42, gazeY: 0.4, mouth: -0.4, open: 0, track: 0.3 },
   sad:        { lidT: 0.34, lidB: 0, lidSkew: 0, scaleSkew: 0, tilt: -20, eyeScale: 1.02, squashY: 1, gap: 1, eyeY: 2, head: 0, gazeX: 0, gazeY: 0, mouth: -0.75, open: 0, track: 0.7 },
+  // lidSkew stacks on lidT, so the right eye carries their sum — past about 0.5
+  // together it shuts and reads as a bug rather than a sneer. Keep the asymmetry
+  // in the *lids* and let squashY do the recoil.
+  disgusted:  { lidT: 0.3, lidB: 0.2, lidSkew: 0.16, scaleSkew: -0.1, tilt: 9, eyeScale: 1.02, squashY: 0.82, gap: 0.94, eyeY: 0, head: -7, gazeX: -0.2, gazeY: 0, mouth: -0.7, open: 0.18, track: 0.6 },
   annoyed:    { lidT: 0.5, lidB: 0.05, lidSkew: 0, scaleSkew: 0, tilt: 10, eyeScale: 1, squashY: 1, gap: 0.96, eyeY: 0, head: -4, gazeX: 0, gazeY: 0, mouth: -0.3, open: 0, track: 1.05 },
   angry:      { lidT: 0.42, lidB: 0, lidSkew: 0, scaleSkew: 0, tilt: 22, eyeScale: 1, squashY: 1, gap: 0.94, eyeY: 0, head: 0, gazeX: 0, gazeY: 0, mouth: -0.55, open: 0, track: 1.15 },
   sleepy:     { lidT: 0.6, lidB: 0.05, lidSkew: 0, scaleSkew: 0, tilt: -4, eyeScale: 1, squashY: 1, gap: 1, eyeY: 2, head: 5, gazeX: 0, gazeY: 0.2, mouth: -0.15, open: 0.15, track: 0.45 },
