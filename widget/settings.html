@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>homie settings</title>
+    <style>
+      :root {
+        --bg: rgba(14, 16, 19, 0.97);
+        --line: rgba(255, 255, 255, 0.08);
+        --text: #d7dbdf;
+        --dim: #878e95;
+        --chip: rgba(255, 255, 255, 0.05);
+        --chip-hover: rgba(255, 255, 255, 0.11);
+        --accent: #8ab4ff;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        user-select: none;
+      }
+      #card {
+        box-sizing: border-box;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        color: var(--text);
+        font: 12px/1.4 system-ui, sans-serif;
+        overflow: hidden;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--line);
+        -webkit-app-region: drag;
+        flex: none;
+      }
+      header .dot {
+        width: 22px;
+        height: 22px;
+        flex: none;
+      }
+      header h1 {
+        font-size: 13px;
+        font-weight: 600;
+        margin: 0;
+        flex: 1;
+      }
+      #x {
+        -webkit-app-region: no-drag;
+        border: none;
+        background: none;
+        color: var(--dim);
+        font-size: 13px;
+        cursor: pointer;
+        padding: 2px 6px;
+        border-radius: 6px;
+      }
+      #x:hover {
+        background: var(--chip-hover);
+        color: #fff;
+      }
+      main {
+        flex: 1;
+        overflow-y: auto;
+        padding: 12px 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      main::-webkit-scrollbar {
+        width: 8px;
+      }
+      main::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.12);
+        border-radius: 4px;
+      }
+      section > h2 {
+        margin: 0 0 7px;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--dim);
+      }
+      /* mood gallery */
+      #autoChip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-bottom: 8px;
+      }
+      .chip {
+        border: 1px solid transparent;
+        background: var(--chip);
+        color: var(--text);
+        font: inherit;
+        border-radius: 999px;
+        padding: 4px 11px;
+        cursor: pointer;
+        transition: background 0.12s, transform 0.05s;
+      }
+      .chip:hover {
+        background: var(--chip-hover);
+      }
+      .chip:active {
+        transform: scale(0.94);
+      }
+      .chip.selected {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: rgba(138, 180, 255, 0.1);
+      }
+      #grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+        gap: 6px;
+      }
+      .cell {
+        border: 1px solid transparent;
+        background: var(--chip);
+        border-radius: 11px;
+        padding: 5px 2px 2px;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        transition: background 0.12s;
+      }
+      .cell:hover {
+        background: var(--chip-hover);
+      }
+      .cell.selected {
+        border-color: var(--accent);
+        background: rgba(138, 180, 255, 0.1);
+      }
+      .cell .mini {
+        width: 34px;
+        height: 34px;
+        pointer-events: none;
+      }
+      .cell .name {
+        font-size: 8.5px;
+        color: var(--dim);
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .cell.selected .name {
+        color: var(--accent);
+      }
+      /* rows of chips */
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+      }
+      /* colors */
+      .crow {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 7px;
+      }
+      .crow > .lbl {
+        width: 34px;
+        flex: none;
+        color: var(--dim);
+      }
+      .crow > .chips {
+        flex: 1;
+        align-items: center;
+      }
+      .swatch {
+        width: 21px;
+        height: 21px;
+        border-radius: 50%;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        padding: 0;
+        cursor: pointer;
+        flex: none;
+      }
+      .swatch.selected {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+      }
+      input[type='color'] {
+        width: 23px;
+        height: 23px;
+        padding: 0;
+        border: none;
+        background: none;
+        cursor: pointer;
+      }
+      input[type='color']::-webkit-color-swatch-wrapper {
+        padding: 0;
+      }
+      input[type='color']::-webkit-color-swatch {
+        border: 1px dashed rgba(255, 255, 255, 0.45);
+        border-radius: 50%;
+      }
+      .toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        cursor: pointer;
+        color: var(--text);
+      }
+      /* size */
+      input[type='range'] {
+        width: 100%;
+        accent-color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="card">
+      <header>
+        <div class="dot" id="headFace"></div>
+        <h1>homie</h1>
+        <button id="x" title="Close">✕</button>
+      </header>
+      <main>
+        <section>
+          <h2>Mood</h2>
+          <div id="autoChip">
+            <button class="chip" id="auto" title="Wanders between moods on its own">✨ auto</button>
+          </div>
+          <div id="grid"></div>
+        </section>
+        <section>
+          <h2>Poke</h2>
+          <div class="chips" id="reactions"></div>
+        </section>
+        <section>
+          <h2>Colors</h2>
+          <div class="crow"><span class="lbl">skin</span><span class="chips" id="skins"></span></div>
+          <div class="crow"><span class="lbl">eyes</span><span class="chips" id="inks"></span></div>
+          <label class="toggle"><input type="checkbox" id="pupils" /> pupils</label>
+        </section>
+        <section>
+          <h2>Fits</h2>
+          <div class="chips" id="presets"></div>
+        </section>
+        <section>
+          <h2>Size</h2>
+          <input type="range" id="size" min="80" max="800" step="4" />
+        </section>
+      </main>
+    </div>
+
+    <script type="module">
+      import { createFace, EXPRESSION_NAMES, REACTION_NAMES } from '../dist/face.js'
+
+      const $ = (s) => document.querySelector(s)
+      let cfg = await window.widget.getCfg()
+
+      const luminance = (hex) => {
+        const n = parseInt(hex.slice(1), 16)
+        return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255
+      }
+      // Mini faces inherit these, so the whole gallery previews the outfit.
+      function applyVars() {
+        for (const el of [$('#grid'), $('#headFace')]) {
+          el.style.setProperty('--face-skin', cfg.skin)
+          el.style.setProperty('--face-ink', cfg.ink)
+          el.style.setProperty(
+            '--face-ring',
+            luminance(cfg.skin) > 0.5 ? 'rgba(0,0,0,.3)' : '#3a3f44'
+          )
+        }
+      }
+
+      // --- header mascot: mirrors the widget's current mood ---
+      let headFace
+      const buildHead = () => {
+        headFace?.destroy()
+        headFace = createFace($('#headFace'), {
+          expression: cfg.mood === 'auto' ? 'happy' : cfg.mood,
+          pupils: cfg.pupils,
+        })
+      }
+
+      // --- mood gallery: one live mini face per expression ---
+      const cells = new Map()
+      let minis = []
+      function buildGrid() {
+        for (const f of minis) f.destroy()
+        minis = []
+        $('#grid').replaceChildren()
+        cells.clear()
+        for (const name of EXPRESSION_NAMES) {
+          const cell = document.createElement('button')
+          cell.className = 'cell'
+          cell.title = name
+          const mini = document.createElement('div')
+          mini.className = 'mini'
+          const label = document.createElement('span')
+          label.className = 'name'
+          label.textContent = name
+          cell.append(mini, label)
+          // idle:false so each face holds its expression; track stays on, so
+          // the whole gallery watches your cursor.
+          minis.push(createFace(mini, { expression: name, idle: false, pupils: cfg.pupils }))
+          cell.addEventListener('click', () => window.widget.setCfg({ mood: name }))
+          $('#grid').appendChild(cell)
+          cells.set(name, cell)
+        }
+      }
+
+      function refreshSelection() {
+        $('#auto').classList.toggle('selected', cfg.mood === 'auto')
+        for (const [name, cell] of cells) cell.classList.toggle('selected', name === cfg.mood)
+        for (const [row, key] of [
+          ['#skins', 'skin'],
+          ['#inks', 'ink'],
+        ]) {
+          for (const b of document.querySelectorAll(`${row} .swatch`))
+            b.classList.toggle('selected', b.dataset.c === cfg[key])
+        }
+        $('#pupils').checked = cfg.pupils
+      }
+
+      $('#auto').addEventListener('click', () => window.widget.setCfg({ mood: 'auto' }))
+
+      // --- reactions: poke the widget ---
+      for (const name of REACTION_NAMES) {
+        const b = document.createElement('button')
+        b.className = 'chip'
+        b.textContent = name
+        b.addEventListener('click', () => window.widget.react(name))
+        $('#reactions').appendChild(b)
+      }
+
+      // --- colors ---
+      const SKINS = ['#16181a', '#f4f5f6', '#ffd166', '#ff6b6b', '#4ecdc4', '#a78bfa', '#b6ff3d', '#ff9ecb']
+      const INKS = ['#e9ebec', '#101214', '#1f6feb', '#ff3d81', '#b6ff3d']
+      function swatchRow(sel, colors, key) {
+        const row = $(sel)
+        for (const c of colors) {
+          const b = document.createElement('button')
+          b.className = 'swatch'
+          b.dataset.c = c
+          b.style.background = c
+          b.addEventListener('click', () => window.widget.setCfg({ [key]: c }))
+          row.appendChild(b)
+        }
+        const picker = document.createElement('input')
+        picker.type = 'color'
+        picker.value = cfg[key]
+        picker.title = 'custom'
+        picker.addEventListener('input', () => window.widget.setCfg({ [key]: picker.value }))
+        row.appendChild(picker)
+      }
+      swatchRow('#skins', SKINS, 'skin')
+      swatchRow('#inks', INKS, 'ink')
+
+      $('#pupils').addEventListener('change', (e) => window.widget.setCfg({ pupils: e.target.checked }))
+
+      // --- presets ---
+      const PRESETS = [
+        ['midnight', { skin: '#16181a', ink: '#e9ebec' }],
+        ['ghost', { skin: '#f4f5f6', ink: '#101214' }],
+        ['terminal', { skin: '#0a0f0b', ink: '#b6ff3d' }],
+        ['bubblegum', { skin: '#ff9ecb', ink: '#5f1d3a' }],
+        ['ocean', { skin: '#4ecdc4', ink: '#0b3437' }],
+      ]
+      for (const [name, patch] of PRESETS) {
+        const b = document.createElement('button')
+        b.className = 'chip'
+        b.textContent = name
+        b.addEventListener('click', () => window.widget.setCfg(patch))
+        $('#presets').appendChild(b)
+      }
+
+      // --- size ---
+      const size = $('#size')
+      size.value = await window.widget.getSize()
+      size.addEventListener('input', () => window.widget.setSize(+size.value))
+
+      // --- sync ---
+      window.widget.onCfg((c) => {
+        const rebuild = c.pupils !== cfg.pupils
+        const moodChanged = c.mood !== cfg.mood
+        cfg = c
+        applyVars()
+        if (rebuild) buildGrid()
+        if (rebuild || moodChanged) buildHead()
+        refreshSelection()
+      })
+
+      $('#x').addEventListener('click', () => window.close())
+      addEventListener('keydown', (e) => e.key === 'Escape' && window.close())
+
+      applyVars()
+      buildGrid()
+      buildHead()
+      refreshSelection()
+    </script>
+  </body>
+</html>
