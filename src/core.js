@@ -421,11 +421,20 @@ export function createFace(host, options = {}) {
           ` rotate(${m.phi.toFixed(2)}) scale(${m.squash.toFixed(3)} 1) rotate(${(-m.phi).toFixed(2)})`,
       )
 
-      mouth.setAttribute('d', `M ${-w} 0 Q 0 ${(curve * 11).toFixed(2)} ${w} 0`)
+      // The curve also *shortens* as the mouth opens, so it tucks behind the
+      // ellipse instead of leaving two half-faded stubs poking out either side —
+      // which is what a fading-only crossfade looks like, and talking lives in
+      // exactly that range.
+      const cw = w * (1 - open * 0.75)
+      mouth.setAttribute('d', `M ${-cw.toFixed(2)} 0 Q 0 ${(curve * 11).toFixed(2)} ${cw.toFixed(2)} 0`)
       mouth.setAttribute('opacity', (1 - open).toFixed(3))
       mouthOpen.setAttribute('rx', (6.5 + open * 2.5).toFixed(2))
       mouthOpen.setAttribute('ry', (open * 8).toFixed(2))
-      mouthOpen.setAttribute('opacity', open.toFixed(3))
+      // Full ink, always: at ry 0 it is invisible anyway, so height alone says
+      // how open the mouth is. Fading it too meant a half-open mouth was a
+      // half-transparent ellipse under a half-transparent curve — which reads as
+      // a smudge, and talking sits in that range constantly.
+      mouthOpen.setAttribute('opacity', '1')
     }
   }
 

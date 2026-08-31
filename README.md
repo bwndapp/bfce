@@ -7,7 +7,7 @@
 **A small, friendly face you can drop into a web page.**
 
 It follows your cursor, blinks on its own, and glances around when you leave it
-alone. 22 moods, nine one-shot reactions, **3.7 kB gzipped**, no dependencies.
+alone. 30 moods, nine one-shot reactions, **3.7 kB gzipped**, no dependencies.
 
 ### [→ Try it live at bbot.bwnd.app](https://bbot.bwnd.app)
 
@@ -17,10 +17,25 @@ alone. 22 moods, nine one-shot reactions, **3.7 kB gzipped**, no dependencies.
 
 ---
 
-## Quick start
+## Install
 
-Nothing to install. The bundle is hosted with styles included, so this is the
-whole integration:
+```sh
+npm i @bwnd/bbot
+```
+
+```js
+import { createFace } from '@bwnd/bbot'
+
+const face = createFace(document.querySelector('#bot'), { expression: 'curious' })
+face.react('bounce')
+```
+
+Styles are injected at runtime, so there is no CSS import and no `<link>`. React
+is an optional peer dependency — the line above pulls in none of it.
+
+## Or skip the install entirely
+
+The bundle is hosted with styles included, so this is a whole integration:
 
 ```html
 <div id="bot" style="width:160px;height:160px"></div>
@@ -44,16 +59,15 @@ import { createFace } from 'https://cdn.jsdelivr.net/gh/bwndapp/bbot@main/dist/f
 
 ## React
 
-Copy `src/` into your project — it's five files, no build config needed.
-
 ```jsx
-import { Face } from './face'
+import { Face } from '@bwnd/bbot/react'
 
 <Face size={160} expression="curious" mouth pupils />
 ```
 
-`Face.jsx` imports its own CSS, so it works as-is with Vite, Next, CRA, or
-Parcel. Drive it through a ref:
+The React build is precompiled and ships styles inside it, so it works as-is with
+Vite, Next, CRA or Parcel — no JSX transpilation of `node_modules`, no CSS
+import. Drive it through a ref:
 
 ```jsx
 const face = useRef(null)
@@ -65,19 +79,9 @@ face.current.setExpression('sad')  // springs across, never snaps
 face.current.look(-1, 0, 1200)     // force the gaze left for 1.2s
 ```
 
-## Desktop widget
-
-The face as a desktop pet: [`widget/`](widget/) wraps it in a frameless,
-transparent, always-on-top Electron window. Drag it around, and its eyes follow
-your cursor across the whole desktop; a ✎ panel picks mood, colours and size.
-
-```sh
-cd widget && npm install && npm start
-```
-
 ## Expressions
 
-<img src="docs/expressions.png" alt="22 expressions: idle, content, happy, joy, excited, love, surprised, scared, curious, confused, thinking, focus, suspicious, smug, sly, bored, worried, sad, annoyed, angry, sleepy, sleep" width="100%">
+<img src="docs/expressions.png" alt="30 expressions: idle, content, happy, joy, excited, love, surprised, scared, curious, confused, thinking, focus, suspicious, smug, sly, bored, worried, sad, annoyed, angry, sleepy, sleep" width="100%">
 
 ```js
 face.setExpression('sleepy')
