@@ -65,6 +65,16 @@ face.current.setExpression('sad')  // springs across, never snaps
 face.current.look(-1, 0, 1200)     // force the gaze left for 1.2s
 ```
 
+## Desktop widget
+
+The face as a desktop pet: [`widget/`](widget/) wraps it in a frameless,
+transparent, always-on-top Electron window. Drag it around, and its eyes follow
+your cursor across the whole desktop; a ✎ panel picks mood, colours and size.
+
+```sh
+cd widget && npm install && npm start
+```
+
 ## Expressions
 
 <img src="docs/expressions.png" alt="22 expressions: idle, content, happy, joy, excited, love, surprised, scared, curious, confused, thinking, focus, suspicious, smug, sly, bored, worried, sad, annoyed, angry, sleepy, sleep" width="100%">

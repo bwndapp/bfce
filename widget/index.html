@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>bfce widget</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        user-select: none;
+        -webkit-app-region: drag;
+      }
+      /* Inset so reactions (shake, boing, …) can overshoot without
+         clipping at the window edge. */
+      #face {
+        position: absolute;
+        inset: 10%;
+        --face-skin: #16181a;
+        --face-ink: #e9ebec;
+        --face-ring: #2f3336;
+      }
+      .ctl {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        border: none;
+        border-radius: 50%;
+        background: #16181a;
+        color: #9aa0a6;
+        font: 12px/1 sans-serif;
+        padding: 0;
+        opacity: 0;
+        transition: opacity 0.15s;
+        -webkit-app-region: no-drag;
+        z-index: 2;
+      }
+      body.hovered .ctl {
+        opacity: 0.6;
+      }
+      body.hovered .ctl:hover {
+        opacity: 1;
+        color: #fff;
+      }
+      #scale {
+        top: 4px;
+        left: 4px;
+        cursor: nwse-resize;
+      }
+      #close {
+        top: 4px;
+        right: 4px;
+        cursor: pointer;
+      }
+      #edit {
+        bottom: 4px;
+        left: 4px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="face"></div>
+    <button id="scale" class="ctl" title="Drag to resize">⤡</button>
+    <button id="close" class="ctl" title="Close">✕</button>
+    <button id="edit" class="ctl" title="Customize">✎</button>
+
+    <script type="module">
+      import { createFace } from '../dist/face.js'
+
+      const faceEl = document.querySelector('#face')
+
+      // --- config lives in the main process; both windows subscribe ---
+      let cfg = await window.widget.getCfg()
+
+      const luminance = (hex) => {
+        const n = parseInt(hex.slice(1), 16)
+        return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255
+      }
+      function applyColors() {
+        faceEl.style.setProperty('--face-skin', cfg.skin)
+        faceEl.style.setProperty('--face-ink', cfg.ink)
+        // Keep the hairline visible on both light and dark skins.
+        faceEl.style.setProperty(
+          '--face-ring',
+          luminance(cfg.skin) > 0.5 ? 'rgba(0,0,0,.3)' : '#2f3336'
+        )
+      }
+
+      // --- the face (rebuilt when pupils change; that option is creation-time) ---
+      const activeMood = () => (cfg.mood === 'auto' ? mood : cfg.mood)
+      let face
+      function buildFace() {
+        face?.destroy()
+        face = createFace(faceEl, {
+          expression: activeMood(),
+          track: false,
+          pupils: cfg.pupils,
+        })
+      }
+
+      window.widget.onCfg((c) => {
+        const rebuild = c.pupils !== cfg.pupils
+        cfg = c
+        applyColors()
+        if (rebuild) buildFace()
+        else face.setExpression(activeMood())
+      })
+      window.widget.onReact((name) => face.react(name))
+
+      document.querySelector('#edit').addEventListener('click', () => window.widget.toggleSettings())
+      document.querySelector('#close').addEventListener('click', () => window.widget.quit())
+      addEventListener('keydown', (e) => e.key === 'Escape' && window.widget.quit())
+
+      // --- scale handle: main process sizes the window to follow the cursor ---
+      const scale = document.querySelector('#scale')
+      scale.addEventListener('pointerdown', (e) => {
+        e.preventDefault()
+        scale.setPointerCapture(e.pointerId)
+        window.widget.resizeStart()
+      })
+      scale.addEventListener('pointerup', () => window.widget.resizeEnd())
+      scale.addEventListener('lostpointercapture', () => window.widget.resizeEnd())
+
+      // --- eyes follow the cursor anywhere on the desktop ---
+      const REACH = 500 // px from face centre for full eye deflection
+      let last = null
+      window.widget.onCursor(({ x, y }) => {
+        // x/y are relative to the window centre, so this doubles as a
+        // hover test that works over the drag region.
+        const inside = Math.abs(x) < innerWidth / 2 && Math.abs(y) < innerHeight / 2
+        document.body.classList.toggle('hovered', inside)
+        if (dragging) return
+        const moved = !last || Math.abs(x - last.x) > 2 || Math.abs(y - last.y) > 2
+        last = { x, y }
+        // Only steer while the cursor is moving; when look() expires the
+        // face's own idle wander takes back over.
+        if (moved) {
+          const clamp = (v) => Math.max(-1, Math.min(1, v / REACH))
+          face.look(clamp(x), clamp(y), 1500)
+        }
+      })
+
+      // --- personality ---
+      const MOODS = [
+        'idle', 'content', 'happy', 'curious', 'thinking', 'smug',
+        'bored', 'sleepy', 'joy', 'suspicious', 'unimpressed', 'relieved',
+      ]
+      let mood = 'idle'
+      function wander() {
+        if (cfg.mood === 'auto') {
+          mood = MOODS[Math.floor(Math.random() * MOODS.length)]
+          face.setExpression(mood)
+          if (Math.random() < 0.25) face.react(Math.random() < 0.5 ? 'wink' : 'bounce')
+        }
+        setTimeout(wander, 8000 + Math.random() * 14000)
+      }
+      setTimeout(wander, 6000)
+
+      // --- being dragged around ---
+      let dragging = false
+      let dropTimer
+      window.widget.onDragging(() => {
+        if (!dragging) {
+          dragging = true
+          face.setExpression('scared')
+        }
+        clearTimeout(dropTimer)
+        dropTimer = setTimeout(() => {
+          dragging = false
+          face.react('boing')
+          face.setExpression(activeMood())
+        }, 250)
+      })
+
+      applyColors()
+      buildFace()
+    </script>
+  </body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "bfce-widget",
+  "version": "1.0.0",
+  "description": "bfce as a draggable, always-on-top desktop widget",
+  "private": true,
+  "type": "commonjs",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}
