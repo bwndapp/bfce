@@ -1,5 +1,5 @@
 {
-  "name": "@bwnd/bfce",
+  "name": "@bwnd/bbot",
   "version": "0.2.0",
   "description": "A small, friendly animated face for web pages. Eyes that follow your cursor, 30 moods, 9 reactions. 3.7 kB, no dependencies.",
   "type": "module",
@@ -55,7 +55,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bwndapp/bfce.git"
+    "url": "git+https://github.com/bwndapp/bbot.git"
   },
-  "homepage": "https://bfce.bwnd.app"
+  "homepage": "https://bbot.bwnd.app"
 }

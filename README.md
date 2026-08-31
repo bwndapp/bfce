@@ -2,16 +2,16 @@
 
 <img src="docs/logo.png" alt="" width="88">
 
-# bfce
+# bbot
 
 **A small, friendly face you can drop into a web page.**
 
 It follows your cursor, blinks on its own, and glances around when you leave it
 alone. 22 moods, nine one-shot reactions, **3.7 kB gzipped**, no dependencies.
 
-### [→ Try it live at bfce.bwnd.app](https://bfce.bwnd.app)
+### [→ Try it live at bbot.bwnd.app](https://bbot.bwnd.app)
 
-<img src="docs/hero.png" alt="bfce — give your app a face" width="820">
+<img src="docs/hero.png" alt="bbot — give your app a face" width="820">
 
 </div>
 
@@ -26,7 +26,7 @@ whole integration:
 <div id="bot" style="width:160px;height:160px"></div>
 
 <script type="module">
-  import { createFace } from 'https://bfce.bwnd.app/face.js'
+  import { createFace } from 'https://bbot.bwnd.app/face.js'
 
   const face = createFace(document.querySelector('#bot'), { expression: 'curious' })
   face.react('bounce')
@@ -39,7 +39,7 @@ whole integration:
 Mirrored on jsDelivr if you'd rather pin a tag than track latest:
 
 ```js
-import { createFace } from 'https://cdn.jsdelivr.net/gh/bwndapp/bfce@main/dist/face.js'
+import { createFace } from 'https://cdn.jsdelivr.net/gh/bwndapp/bbot@main/dist/face.js'
 ```
 
 ## React
@@ -184,8 +184,8 @@ shake automatically — don't add your own guard.
 Machine-readable docs are served next to the library, so an agent can work out
 how to use it without a human in the loop:
 
-- [`SKILL.md`](https://bfce.bwnd.app/SKILL.md) — full API and the mistakes worth avoiding
-- [`llms.txt`](https://bfce.bwnd.app/llms.txt) — short index
+- [`SKILL.md`](https://bbot.bwnd.app/SKILL.md) — full API and the mistakes worth avoiding
+- [`llms.txt`](https://bbot.bwnd.app/llms.txt) — short index
 
 ## Local development
 

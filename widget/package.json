@@ -1,7 +1,7 @@
 {
-  "name": "bfce-widget",
+  "name": "bbot-widget",
   "version": "1.0.0",
-  "description": "bfce as a draggable, always-on-top desktop widget",
+  "description": "bbot as a draggable, always-on-top desktop widget",
   "private": true,
   "type": "commonjs",
   "main": "main.js",

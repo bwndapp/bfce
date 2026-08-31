@@ -30,8 +30,8 @@ python3 make-slides.py  # -> promo/slide-*.png
 ## Suggested caption
 
 > a 3.7 kB face for your website. it follows your cursor, blinks on its own, and
-> has 22 moods. free and open source → bfce.bwnd.app
+> has 22 moods. free and open source → bbot.bwnd.app
 
 Note the faces are static here — the library is animated. A screen recording of
-[bfce.bwnd.app](https://bfce.bwnd.app) makes a better video than these stills;
+[bbot.bwnd.app](https://bbot.bwnd.app) makes a better video than these stills;
 the slides are for photo-mode posts.

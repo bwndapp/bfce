@@ -1,4 +1,4 @@
-# bfce desktop widget
+# bbot desktop widget
 
 The face, off the page: a frameless, transparent, always-on-top Electron window
 that floats on your desktop.

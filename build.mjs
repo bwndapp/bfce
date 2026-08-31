@@ -1,4 +1,4 @@
-// Builds the published bundles. Runs in the mirror repo (github.com/bwndapp/bfce),
+// Builds the published bundles. Runs in the mirror repo (github.com/bwndapp/bbot),
 // where `src/` is a copy of this incubator's frontend/src/face — see
 // publish-face.sh, which puts this file there.
 //
@@ -6,7 +6,7 @@
 //   dist/react.js  the same plus the <Face> component, react external
 //   dist/face.css  standalone stylesheet, for anyone importing raw src/
 //
-// Both JS bundles inject their own styles, which is why `import '@bwnd/bfce'`
+// Both JS bundles inject their own styles, which is why `import '@bwnd/bbot'`
 // needs no <link> and no CSS import. The package entry points at dist rather
 // than src on purpose: src/index.js pulls in Face.jsx, and shipping raw JSX as
 // a package's main entry breaks every consumer whose bundler doesn't transpile
