@@ -452,7 +452,10 @@
       let lastH = 0
       let lastT = 0
       let pend = null
-      const contentH = () => log.scrollHeight + bar.offsetHeight + row.offsetHeight + 22
+      // 16px wrap padding + one 6px gap per visible sibling + a 2px buffer;
+      // undercounting here clips the last line of long messages
+      const contentH = () =>
+        log.scrollHeight + bar.offsetHeight + row.offsetHeight + 18 + (bar.hidden ? 6 : 12)
       function report(force) {
         if (streaming && !force) return
         const want = Math.min(600, contentH())

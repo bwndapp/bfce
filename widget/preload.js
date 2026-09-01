@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('widget', {
   onChatHistory: (cb) => ipcRenderer.on('chat-history', (_e, h) => cb(h)),
   onNotify: (cb) => ipcRenderer.on('notify', (_e, n) => cb(n)),
   onNotifyClear: (cb) => ipcRenderer.on('notify-clear', () => cb()),
+  onSpeak: (cb) => ipcRenderer.on('speak', (_e, s) => cb(s)),
   resetThread: () => ipcRenderer.send('reset-thread'),
   ogFetch: (url) => ipcRenderer.invoke('og-fetch', url),
   toggleChat: () => ipcRenderer.send('toggle-chat'),

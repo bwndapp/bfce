@@ -104,6 +104,11 @@
         background: rgba(138, 180, 255, 0.12);
         color: var(--accent);
       }
+      .tab.ext {
+        font-size: 9px;
+        padding: 8px 2px;
+        opacity: 0.75;
+      }
       .tabdot {
         position: absolute;
         top: 6px;
@@ -374,6 +379,9 @@
         <nav>
           <button class="tab active" data-tab="custom">style</button>
           <button class="tab" data-tab="config">config<span class="tabdot" id="tabDot"></span></button>
+          <span style="flex: 1"></span>
+          <button class="tab ext" id="lnkSite" title="bbot.bwnd.app">site</button>
+          <button class="tab ext" id="lnkRepo" title="Star bbot on GitHub">github</button>
         </nav>
         <main>
           <div class="pane" id="pane-custom">
@@ -393,6 +401,15 @@
               <div class="crow"><span class="lbl">skin</span><span class="chips" id="skins"></span></div>
               <div class="crow"><span class="lbl">eyes</span><span class="chips" id="inks"></span></div>
               <label class="toggle"><input type="checkbox" id="pupils" /> pupils</label>
+            </section>
+            <section>
+              <h2>Voice</h2>
+              <div class="crow">
+                <label class="toggle"><input type="checkbox" id="voiceOn" /> speak</label>
+                <span class="lbl" style="width: auto">low</span>
+                <input type="range" id="voicePitch" min="0.6" max="1.8" step="0.05" style="flex: 1" />
+                <span class="lbl" style="width: auto">high</span>
+              </div>
             </section>
             <section>
               <h2>Fits</h2>
@@ -415,20 +432,8 @@
                 <button id="go">connect</button>
               </div>
               <div class="conn-row"><span id="connStatus"><b>offline</b> — chat is disabled until connected</span></div>
-            </section>
-            <section>
-              <h2>About</h2>
-              <div class="hint">
-                A bbot stands in for one of your Tension incubators over a single
-                WebSocket. Chat threads are shared with the Tension web UI. Chat
-                needs the connection — offline sends show an error.
-                Local testing: <code>npm run dev-server</code> →
-                <code>ws://localhost:8787</code>, any key.
-              </div>
-              <div class="hint" style="margin-top: 8px">
-                No account yet? Bots live at
-                <a href="https://bwnd.app" target="_blank" id="bwndLink">bwnd.app</a>
-                — sign up, spin up an incubator, and mint a widget key.
+              <div class="conn-row hint">
+                keys are minted at <a href="https://bwnd.app" target="_blank">bwnd.app</a>
               </div>
             </section>
           </div>
@@ -443,13 +448,16 @@
       let cfg = await window.widget.getCfg()
 
       // --- tabs ---
-      for (const tab of document.querySelectorAll('.tab')) {
+      for (const tab of document.querySelectorAll('.tab[data-tab]')) {
         tab.addEventListener('click', () => {
-          for (const t of document.querySelectorAll('.tab')) t.classList.toggle('active', t === tab)
+          for (const t of document.querySelectorAll('.tab[data-tab]')) t.classList.toggle('active', t === tab)
           $('#pane-custom').hidden = tab.dataset.tab !== 'custom'
           $('#pane-config').hidden = tab.dataset.tab !== 'config'
         })
       }
+      // outbound links open in the real browser via the window-open handler
+      $('#lnkSite').addEventListener('click', () => window.open('https://bbot.bwnd.app'))
+      $('#lnkRepo').addEventListener('click', () => window.open('https://github.com/bwndapp/bbot'))
 
       const luminance = (hex) => {
         const n = parseInt(hex.slice(1), 16)
@@ -553,6 +561,12 @@
 
       $('#pupils').addEventListener('change', (e) => window.widget.setCfg({ pupils: e.target.checked }))
 
+      // --- voice ---
+      $('#voiceOn').checked = cfg.voice !== false
+      $('#voicePitch').value = cfg.voicePitch || 1
+      $('#voiceOn').addEventListener('change', (e) => window.widget.setCfg({ voice: e.target.checked }))
+      $('#voicePitch').addEventListener('change', () => window.widget.setCfg({ voicePitch: +$('#voicePitch').value }))
+
       // --- presets ---
       const PRESETS = [
         ['midnight', { skin: '#16181a', ink: '#e9ebec' }],
@@ -590,7 +604,7 @@
         $('#go').textContent = connStatus === 'on' || connStatus === 'connecting' ? 'disconnect' : 'connect'
         $('#connStatus').innerHTML =
           connStatus === 'on'
-            ? `<b>connected</b>${connUser?.email ? ' as ' + connUser.email : ''} — bots speak for themselves now`
+            ? `<b>connected</b>${connUser?.email ? ' as ' + connUser.email : ''}`
             : connStatus === 'connecting'
               ? '<b>connecting…</b> retrying until it sticks'
               : connStatus === 'denied'

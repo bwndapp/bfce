@@ -1,6 +1,6 @@
 {
   "name": "@bwnd/bbot",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A small, friendly animated face for web pages. Eyes that follow your cursor, 30 moods, 9 reactions. 3.7 kB, no dependencies.",
   "type": "module",
   "license": "MIT",

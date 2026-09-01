@@ -11,6 +11,8 @@ const DEFAULTS = {
   ink: '#e9ebec',
   pupils: false,
   mood: 'auto',
+  voice: true,
+  voicePitch: 1,
   server: 'wss://bwnd.app/api/v1/incubators/public/bbots/ws',
   token: '', // the bbk_… device key
   incubator: '', // which of the user's incubators this bbot stands in for
@@ -94,15 +96,31 @@ const CHAT_W = 320
 let chat = null
 let chatH = 60
 
-function positionChat() {
-  if (!chat || chat.isDestroyed() || !win || win.isDestroyed()) return
+function chatBounds() {
   const b = win.getBounds()
   const area = screen.getDisplayMatching(b).workArea
+  const gap = 6
   let x = Math.round(b.x + b.width / 2 - CHAT_W / 2)
   x = Math.max(area.x, Math.min(x, area.x + area.width - CHAT_W))
-  let y = b.y - chatH - 6
-  if (y < area.y) y = b.y + b.height + 6 // no room above — sit below
-  chat.setBounds({ x, y, width: CHAT_W, height: chatH })
+  // Prefer above, shrinking to the room there (the log scrolls inside);
+  // only sit below when above is genuinely cramped AND below is roomier.
+  const above = b.y - area.y - gap
+  const below = area.y + area.height - (b.y + b.height) - gap
+  let h
+  let y
+  if (above >= 160 || above >= below) {
+    h = Math.max(60, Math.min(chatH, above))
+    y = b.y - h - gap
+  } else {
+    h = Math.max(60, Math.min(chatH, below))
+    y = b.y + b.height + gap
+  }
+  return { x, y: Math.round(y), width: CHAT_W, height: Math.round(h) }
+}
+
+function positionChat() {
+  if (!chat || chat.isDestroyed() || !win || win.isDestroyed()) return
+  chat.setBounds(chatBounds())
 }
 
 function toggleChat() {
@@ -111,10 +129,11 @@ function toggleChat() {
     return
   }
   chatH = 60 // a fresh chat starts compact; the page reports real size
+  const at = chatBounds() // born in place — no centered flash, no jump
   chat = new BrowserWindow({
-    width: CHAT_W,
-    height: chatH,
+    ...at,
     icon: ICON,
+    show: false,
     transparent: true,
     frame: false,
     resizable: false,
@@ -137,6 +156,7 @@ function toggleChat() {
   chat.webContents.on('will-navigate', (e) => e.preventDefault())
   chat.once('ready-to-show', () => {
     positionChat()
+    chat.show()
     chat.webContents.send('chat-focus')
     openThread() // a pending notification opens straight into its thread
   })
@@ -324,9 +344,11 @@ ipcMain.on('chat-send', async (_e, text) => {
           toWin('chat-state', { state: 'streaming' })
         }
         toChat('chat-delta', { text: ev.content })
+        toWin('speak', { text: ev.content }) // the voice rides the stream
       }
       if (ev.type === 'tool') toWin('chat-state', { state: 'tool' })
     })
+    if (!streaming) toWin('speak', { text: final }) // reply arrived un-streamed
     toChat('chat-reply', { text: final }) // `response` is the source of truth
     toWin('chat-state', { state: 'reply', ...brain.inferMood(final) })
   } catch (err) {

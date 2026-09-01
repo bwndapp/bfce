@@ -330,6 +330,56 @@
       }
       setTimeout(wander, 6000)
 
+      // --- the voice: animalese-ish gibberish shaped by the real text.
+      // Each letter is a pitched blip (vowels ring high and long, consonants
+      // tick low and short, same letter always sounds the same), punctuation
+      // phrases it, and '?' lilts upward. It voices the token stream itself,
+      // so speech lasts exactly as long as the reply is arriving.
+      let vctx = null
+      let vt = 0
+      function blipNote(freq, t, dur, peak = 0.07) {
+        // soft sine chirp that bends upward — reads as chirpy, not buzzy
+        const o = vctx.createOscillator()
+        const g = vctx.createGain()
+        o.type = 'sine'
+        o.frequency.setValueAtTime(freq * 0.82, t)
+        o.frequency.exponentialRampToValueAtTime(freq * 1.06, t + dur)
+        g.gain.setValueAtTime(0, t)
+        g.gain.linearRampToValueAtTime(peak, t + 0.007)
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+        o.connect(g).connect(vctx.destination)
+        o.start(t)
+        o.stop(t + dur + 0.03)
+      }
+      window.widget.onSpeak(({ text }) => {
+        if (cfg.voice === false) return
+        try {
+          vctx ??= new AudioContext()
+        } catch {
+          return
+        }
+        const now = vctx.currentTime
+        if (vt < now + 0.03) vt = now + 0.03
+        const pitch = cfg.voicePitch || 1
+        for (const ch of String(text).toLowerCase()) {
+          if (vt > now + 5) return // stay roughly in step with the stream
+          if (/[a-z0-9]/.test(ch)) {
+            const vowel = 'aeiou'.includes(ch)
+            const seed = ((ch.charCodeAt(0) * 7919) % 97) / 97
+            const f = 340 * pitch * (vowel ? 1.55 + seed * 0.95 : 1.1 + seed * 0.6)
+            const dur = vowel ? 0.048 : 0.032
+            blipNote(f, vt, dur)
+            vt += dur * 0.8
+          } else if (ch === ' ') vt += 0.028
+          else if (',;:'.includes(ch)) vt += 0.09
+          else if (ch === '?') {
+            blipNote(560 * pitch, vt, 0.06)
+            blipNote(790 * pitch, vt + 0.055, 0.09)
+            vt += 0.19
+          } else if ('.!'.includes(ch)) vt += 0.15
+        }
+      })
+
       // --- a bot reached out: peep bubble up and perk up ---
       const peep = document.querySelector('#peep')
       let peepTimer = null
