@@ -12,15 +12,22 @@
         overflow: hidden;
         user-select: none;
         -webkit-app-region: drag;
+        /* palette lives here so the peep bubble can wear it too */
+        --face-skin: #16181a;
+        --face-ink: #e9ebec;
+        --face-ring: #2f3336;
       }
       /* Inset so reactions (shake, boing, …) can overshoot without
          clipping at the window edge. */
       #face {
         position: absolute;
         inset: 10%;
-        --face-skin: #16181a;
-        --face-ink: #e9ebec;
-        --face-ring: #2f3336;
+        /* clickable (click = chat, press-and-move = drag), so no OS drag region */
+        -webkit-app-region: no-drag;
+        cursor: grab;
+      }
+      #face:active {
+        cursor: grabbing;
       }
       .ctl {
         position: absolute;
@@ -64,6 +71,100 @@
         right: 4px;
         cursor: pointer;
       }
+      /* unread notification: a big anime "!" right off the head */
+      #peep {
+        position: absolute;
+        top: 0;
+        right: 7%;
+        font: 900 26vmin/0.9 system-ui, sans-serif;
+        color: var(--face-ink);
+        -webkit-text-stroke: 2vmin var(--face-skin);
+        paint-order: stroke fill;
+        transform: rotate(12deg);
+        z-index: 3;
+        pointer-events: none;
+        animation:
+          peekin 0.35s cubic-bezier(0.34, 1.8, 0.64, 1),
+          bob 1.6s 0.35s ease-in-out infinite;
+      }
+      @keyframes peekin {
+        from {
+          opacity: 0;
+          transform: rotate(12deg) scale(0.2) translateY(30%);
+        }
+      }
+      @keyframes bob {
+        50% {
+          transform: rotate(12deg) translateY(-4%) scale(1.06);
+        }
+      }
+      #peep[hidden] {
+        display: none;
+      }
+      /* pending reply: a thought forming — bubbles pop in one after another,
+         hold together, shrink away, repeat */
+      #think {
+        position: absolute;
+        top: 3%;
+        left: 9%;
+        width: 19vmin;
+        height: 19vmin;
+        z-index: 3;
+        pointer-events: none;
+      }
+      #think i {
+        position: absolute;
+        border-radius: 50%;
+        background: var(--face-ink);
+        border: 0.9vmin solid var(--face-skin);
+        opacity: 0;
+        animation: tcycle 2.2s ease-in-out infinite;
+      }
+      #think i:nth-child(1) {
+        width: 3vmin;
+        height: 3vmin;
+        bottom: 0;
+        right: 0;
+      }
+      #think i:nth-child(2) {
+        width: 4.5vmin;
+        height: 4.5vmin;
+        bottom: 4.2vmin;
+        right: 4.2vmin;
+        animation-delay: 0.22s;
+      }
+      #think i:nth-child(3) {
+        width: 7.5vmin;
+        height: 7.5vmin;
+        bottom: 9.5vmin;
+        right: 9.5vmin;
+        animation-delay: 0.44s;
+      }
+      @keyframes tcycle {
+        0% {
+          transform: scale(0);
+          opacity: 0;
+        }
+        12% {
+          transform: scale(1.18);
+          opacity: 1;
+        }
+        20% {
+          transform: scale(1);
+        }
+        70% {
+          transform: scale(1);
+          opacity: 1;
+        }
+        84%,
+        100% {
+          transform: scale(0.5);
+          opacity: 0;
+        }
+      }
+      #think[hidden] {
+        display: none;
+      }
     </style>
   </head>
   <body>
@@ -71,7 +172,9 @@
     <button id="scale" class="ctl" title="Drag to resize">⤡</button>
     <button id="close" class="ctl" title="Close">✕</button>
     <button id="edit" class="ctl" title="Customize">✎</button>
-    <button id="talk" class="ctl" title="Talk to homie">💬</button>
+    <button id="talk" class="ctl" title="Chat">…</button>
+    <div id="peep" hidden>!</div>
+    <div id="think" hidden><i></i><i></i><i></i></div>
 
     <script type="module">
       import { createFace } from '../dist/face.js'
@@ -86,10 +189,11 @@
         return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255
       }
       function applyColors() {
-        faceEl.style.setProperty('--face-skin', cfg.skin)
-        faceEl.style.setProperty('--face-ink', cfg.ink)
+        // set on body: the face inherits, and so does the peep bubble
+        document.body.style.setProperty('--face-skin', cfg.skin)
+        document.body.style.setProperty('--face-ink', cfg.ink)
         // Keep the hairline visible on both light and dark skins.
-        faceEl.style.setProperty(
+        document.body.style.setProperty(
           '--face-ring',
           luminance(cfg.skin) > 0.5 ? 'rgba(0,0,0,.3)' : '#2f3336'
         )
@@ -119,12 +223,39 @@
       document.querySelector('#edit').addEventListener('click', () => window.widget.toggleSettings())
       document.querySelector('#talk').addEventListener('click', () => window.widget.toggleChat())
 
-      // --- chat choreography: homie acts out the conversation ---
+      // --- the face itself: click to chat, press-and-move to drag ---
+      let pressing = null
+      faceEl.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return
+        faceEl.setPointerCapture(e.pointerId)
+        pressing = { x: e.screenX, y: e.screenY, moved: false }
+      })
+      faceEl.addEventListener('pointermove', (e) => {
+        if (!pressing || pressing.moved) return
+        if (Math.hypot(e.screenX - pressing.x, e.screenY - pressing.y) > 4) {
+          pressing.moved = true
+          window.widget.moveStart()
+        }
+      })
+      faceEl.addEventListener('pointerup', () => {
+        if (!pressing) return
+        if (pressing.moved) window.widget.moveEnd()
+        else window.widget.toggleChat()
+        pressing = null
+      })
+      faceEl.addEventListener('lostpointercapture', () => {
+        if (pressing?.moved) window.widget.moveEnd()
+        pressing = null
+      })
+
+      // --- chat choreography: the face acts out the conversation ---
       let chatTimer
       let chatting = false
+      const think = document.querySelector('#think')
       window.widget.onChatState(({ state, mood: replyMood, react }) => {
         clearTimeout(chatTimer)
         chatting = state !== 'end'
+        think.hidden = state !== 'thinking' && state !== 'tool'
         if (state === 'open') {
           face.setExpression('curious')
           face.react('pop')
@@ -132,6 +263,16 @@
         } else if (state === 'thinking') {
           face.setExpression('thinking')
           face.look(-0.4, -0.7, 2500)
+        } else if (state === 'streaming') {
+          // words are landing — look at the bubbles and talk
+          face.setExpression('content')
+          face.look(0, -0.6, 1200)
+        } else if (state === 'tool') {
+          face.setExpression('focus')
+        } else if (state === 'error') {
+          face.setExpression('worried')
+          face.react('shake')
+          chatTimer = setTimeout(() => face.setExpression(activeMood()), 5000)
         } else if (state === 'reply') {
           face.setExpression(replyMood || 'content')
           if (react) face.react(react)
@@ -188,6 +329,52 @@
         setTimeout(wander, 8000 + Math.random() * 14000)
       }
       setTimeout(wander, 6000)
+
+      // --- a bot reached out: peep bubble up and perk up ---
+      const peep = document.querySelector('#peep')
+      let peepTimer = null
+
+      // a cute two-note blip, synthesized so there's no asset to ship
+      let audioCtx = null
+      function blip() {
+        try {
+          audioCtx ??= new AudioContext()
+          const t0 = audioCtx.currentTime
+          const note = (freq, start, dur, peak = 0.15) => {
+            const o = audioCtx.createOscillator()
+            const g = audioCtx.createGain()
+            o.type = 'sine'
+            o.frequency.setValueAtTime(freq, t0 + start)
+            g.gain.setValueAtTime(0, t0 + start)
+            g.gain.linearRampToValueAtTime(peak, t0 + start + 0.012)
+            g.gain.exponentialRampToValueAtTime(0.0001, t0 + start + dur)
+            o.connect(g).connect(audioCtx.destination)
+            o.start(t0 + start)
+            o.stop(t0 + start + dur + 0.05)
+          }
+          note(784, 0, 0.09) // G5…
+          note(1175, 0.07, 0.16) // …up to D6: "bli-bloop"
+        } catch {}
+      }
+
+      window.widget.onNotify(() => {
+        peep.hidden = false
+        blip()
+        if (!chatting) {
+          clearTimeout(chatTimer)
+          face.setExpression('excited')
+          face.react('pop')
+          face.react('bounce')
+          chatTimer = setTimeout(() => face.setExpression(activeMood()), 4000)
+        }
+        // a soft nudge now and then until it's read
+        clearInterval(peepTimer)
+        peepTimer = setInterval(() => !chatting && face.react('bounce'), 15000)
+      })
+      window.widget.onNotifyClear(() => {
+        peep.hidden = true
+        clearInterval(peepTimer)
+      })
 
       // --- being dragged around ---
       let dragging = false

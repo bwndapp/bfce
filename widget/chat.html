@@ -2,36 +2,56 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>homie chat</title>
+    <title>bbot chat</title>
     <style>
       html,
       body {
         margin: 0;
+        height: 100%;
         background: transparent;
         overflow: hidden;
         user-select: none;
-        font: 13px/1.4 system-ui, sans-serif;
+        font: 13px/1.45 system-ui, sans-serif;
       }
-      #stack {
+      #wrap {
+        box-sizing: border-box;
+        height: 100%;
         display: flex;
         flex-direction: column;
-        align-items: center;
         gap: 6px;
         padding: 8px;
       }
+      #log {
+        flex: 1;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+      }
+      #log::-webkit-scrollbar {
+        width: 6px;
+      }
+      #log::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.16);
+        border-radius: 3px;
+      }
+      /* keeps a short conversation hugging the input instead of the top */
+      #log > :first-child {
+        margin-top: auto;
+      }
       .bubble {
-        max-width: 240px;
+        max-width: 250px;
         padding: 8px 12px;
         border-radius: 16px;
         animation: pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
         transform-origin: bottom center;
-        word-wrap: break-word;
+        overflow-wrap: break-word;
         white-space: pre-wrap;
-      }
-      .bubble.gone {
-        transition: opacity 0.5s, transform 0.5s;
-        opacity: 0;
-        transform: translateY(-8px) scale(0.9);
+        user-select: text;
+        cursor: text;
+        flex: none;
       }
       @keyframes pop {
         from {
@@ -39,15 +59,14 @@
           transform: translateY(10px) scale(0.7);
         }
       }
-      .homie {
+      .bot {
         align-self: flex-start;
         background: var(--skin, #16181a);
         color: var(--ink, #e9ebec);
         border: 1px solid var(--ring, #2f3336);
         position: relative;
       }
-      /* tail pointing down toward homie */
-      .homie.tailed::after {
+      .bot.tailed::after {
         content: '';
         position: absolute;
         left: 18px;
@@ -66,10 +85,140 @@
         color: #eceff1;
         backdrop-filter: blur(6px);
       }
+      .err {
+        align-self: flex-start;
+        background: rgba(120, 24, 32, 0.92);
+        color: #ffcdd1;
+        border: 1px solid rgba(255, 107, 107, 0.5);
+        font-size: 12px;
+      }
+      .bubble pre {
+        background: rgba(0, 0, 0, 0.35);
+        padding: 8px 10px;
+        border-radius: 8px;
+        overflow-x: auto;
+        font: 11px/1.5 ui-monospace, Consolas, monospace;
+        margin: 6px 0;
+        white-space: pre;
+      }
+      .bubble code {
+        font: 0.92em ui-monospace, Consolas, monospace;
+        background: rgba(0, 0, 0, 0.28);
+        padding: 1px 4px;
+        border-radius: 4px;
+      }
+      .bubble pre code {
+        background: none;
+        padding: 0;
+      }
+      .bubble a {
+        color: inherit;
+        text-decoration: underline;
+      }
+      .bubble b {
+        font-weight: 650;
+      }
+      /* rendered markdown drops pre-wrap; blocks manage their own spacing */
+      .bubble.rich {
+        white-space: normal;
+      }
+      .rich p {
+        margin: 4px 0;
+      }
+      .rich p:first-child,
+      .rich h3:first-child,
+      .rich h4:first-child {
+        margin-top: 0;
+      }
+      .rich p:last-child {
+        margin-bottom: 0;
+      }
+      .rich ul,
+      .rich ol {
+        margin: 4px 0;
+        padding-left: 18px;
+      }
+      .rich li {
+        margin: 2px 0;
+      }
+      .rich blockquote {
+        margin: 4px 0;
+        padding: 2px 10px;
+        border-left: 3px solid rgba(255, 255, 255, 0.3);
+        opacity: 0.85;
+      }
+      .rich h3,
+      .rich h4,
+      .rich h5,
+      .rich h6 {
+        margin: 8px 0 3px;
+        font-weight: 650;
+      }
+      .rich h3 {
+        font-size: 15px;
+      }
+      .rich h4 {
+        font-size: 14px;
+      }
+      .rich h5,
+      .rich h6 {
+        font-size: 13px;
+      }
+      .rich hr {
+        border: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+        margin: 7px 0;
+      }
+      .og {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-top: 7px;
+        padding: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.25);
+        color: inherit;
+        text-decoration: none !important;
+      }
+      .og img {
+        width: 44px;
+        height: 44px;
+        border-radius: 6px;
+        object-fit: cover;
+        flex: none;
+      }
+      .ogbox {
+        min-width: 0;
+      }
+      .ogt {
+        font-size: 11.5px;
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .ogd {
+        font-size: 10.5px;
+        opacity: 0.75;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .ogh {
+        font-size: 10px;
+        opacity: 0.5;
+      }
       .dots {
         display: inline-flex;
         gap: 4px;
         padding: 3px 0;
+      }
+      .tick {
+        margin-left: 8px;
+        font-size: 10px;
+        opacity: 0.55;
+        font-variant-numeric: tabular-nums;
       }
       .dots i {
         width: 6px;
@@ -97,21 +246,45 @@
           opacity: 1;
         }
       }
+      #bar {
+        display: flex;
+        justify-content: flex-end;
+        flex: none;
+      }
+      #bar[hidden] {
+        display: none;
+      }
+      #clearBtn {
+        background: none;
+        border: none;
+        color: #6d757c;
+        font: 10px system-ui, sans-serif;
+        cursor: pointer;
+        padding: 2px 8px;
+        border-radius: 6px;
+      }
+      #clearBtn:hover {
+        color: #eceff1;
+        background: rgba(255, 255, 255, 0.1);
+      }
       #row {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 2px 0 0;
+        flex: none;
       }
       #input {
+        display: block;
         width: 100%;
         box-sizing: border-box;
         border: 1px solid rgba(255, 255, 255, 0.18);
-        border-radius: 999px;
+        border-radius: 16px;
         background: rgba(16, 18, 20, 0.92);
         color: #eceff1;
         font: inherit;
         padding: 9px 15px;
         outline: none;
+        resize: none;
+        max-height: 96px;
+        overflow-y: auto;
+        scrollbar-width: none;
       }
       #input:focus {
         border-color: rgba(255, 255, 255, 0.35);
@@ -122,93 +295,341 @@
     </style>
   </head>
   <body>
-    <div id="stack">
-      <div id="row"><input id="input" placeholder="say something to homie…" maxlength="280" /></div>
+    <div id="wrap">
+      <div id="log"></div>
+      <div id="bar" hidden><button id="clearBtn" title="Clear this chat view">clear</button></div>
+      <div id="row"><textarea id="input" rows="1" placeholder="say something to your bbot…" maxlength="2000"></textarea></div>
     </div>
 
     <script type="module">
-      const stack = document.querySelector('#stack')
+      const log = document.querySelector('#log')
+      const bar = document.querySelector('#bar')
       const row = document.querySelector('#row')
       const input = document.querySelector('#input')
+      const updateBar = () => (bar.hidden = log.children.length === 0)
 
-      // bubbles wear homie's outfit
+      // bubbles wear the bbot's colours
       let cfg = await window.widget.getCfg()
       const applyVars = () => {
         const lum = (h) => {
           const n = parseInt(h.slice(1), 16)
           return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255
         }
-        stack.style.setProperty('--skin', cfg.skin)
-        stack.style.setProperty('--ink', cfg.ink)
-        stack.style.setProperty('--ring', lum(cfg.skin) > 0.5 ? 'rgba(0,0,0,.3)' : '#2f3336')
+        log.style.setProperty('--skin', cfg.skin)
+        log.style.setProperty('--ink', cfg.ink)
+        log.style.setProperty('--ring', lum(cfg.skin) > 0.5 ? 'rgba(0,0,0,.3)' : '#2f3336')
       }
       applyVars()
       window.widget.onCfg((c) => ((cfg = c), applyVars()))
 
-      // window height follows content
-      new ResizeObserver(() => window.widget.chatSize(stack.offsetHeight)).observe(stack)
+      // --- markdown: fences and inline code protected first, then inline
+      // styles + autolinked bare URLs, then a line-based block pass
+      // (headings, lists, quotes, rules, paragraphs) ---
+      const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      function renderMd(text) {
+        const fences = []
+        let t = String(text).replace(/```\w*\n?([\s\S]*?)```/g, (_, code) => {
+          fences.push(code.replace(/\n$/, ''))
+          return `\x00F${fences.length - 1}\x00`
+        })
+        t = esc(t)
+        const codes = []
+        t = t.replace(/`([^`\n]+)`/g, (_, c) => {
+          codes.push(c)
+          return `\x00C${codes.length - 1}\x00`
+        })
+        t = t.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
+        t = t.replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,!?;:]|$)/gm, '$1<i>$2</i>')
+        t = t.replace(/~~([^~\n]+)~~/g, '<s>$1</s>')
+        t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+        // bare URLs, trailing punctuation left out of the link
+        t = t.replace(
+          /(^|[^"'=\]>/])(https?:\/\/[^\s<>"')]+?)([.,;:!?]*)(?=$|[\s<>"')])/gm,
+          (_, pre, url, tail) => `${pre}<a href="${url}" target="_blank">${url}</a>${tail}`
+        )
 
-      const MAX_BUBBLES = 4
+        let html = ''
+        let para = []
+        let list = null
+        let quote = []
+        const flushPara = () => {
+          if (para.length) html += `<p>${para.join('<br>')}</p>`
+          para = []
+        }
+        const flushList = () => {
+          if (list) html += `</${list}>`
+          list = null
+        }
+        const flushQuote = () => {
+          if (quote.length) html += `<blockquote>${quote.join('<br>')}</blockquote>`
+          quote = []
+        }
+        const flushAll = () => (flushPara(), flushList(), flushQuote())
+        for (const line of t.split('\n')) {
+          let m
+          if (/^\s*$/.test(line)) flushAll()
+          else if ((m = line.match(/^\x00F(\d+)\x00\s*$/))) (flushAll(), (html += `\x00F${m[1]}\x00`))
+          else if (/^\s*([-*_])\s*\1\s*\1[\s\-*_]*$/.test(line)) (flushAll(), (html += '<hr>'))
+          else if ((m = line.match(/^(#{1,4})\s+(.+)/)))
+            (flushAll(), (html += `<h${m[1].length + 2 > 6 ? 6 : m[1].length + 2}>${m[2]}</h${m[1].length + 2 > 6 ? 6 : m[1].length + 2}>`))
+          else if ((m = line.match(/^\s*&gt;\s?(.*)/))) (flushPara(), flushList(), quote.push(m[1]))
+          else if ((m = line.match(/^\s*\d+[.)]\s+(.+)/))) {
+            flushPara()
+            flushQuote()
+            if (list !== 'ol') (flushList(), (html += '<ol>'), (list = 'ol'))
+            html += `<li>${m[1]}</li>`
+          } else if ((m = line.match(/^\s*[-*+]\s+(.+)/))) {
+            flushPara()
+            flushQuote()
+            if (list !== 'ul') (flushList(), (html += '<ul>'), (list = 'ul'))
+            html += `<li>${m[1]}</li>`
+          } else (flushList(), flushQuote(), para.push(line))
+        }
+        flushAll()
+
+        html = html.replace(/\x00C(\d+)\x00/g, (_, i) => `<code>${codes[i]}</code>`)
+        html = html.replace(/\x00F(\d+)\x00/g, (_, i) => `<pre><code>${esc(fences[i])}</code></pre>`)
+        return html
+      }
+
+      // --- OG preview cards under a bubble's first couple of links ---
+      const decodeEntities = (s) => {
+        const e = document.createElement('textarea')
+        e.innerHTML = s
+        return e.value
+      }
+      async function attachOg(bubble) {
+        const links = [...new Set([...bubble.querySelectorAll('a[href^="http"]')].map((a) => a.href))].slice(0, 2)
+        for (const url of links) {
+          const og = await window.widget.ogFetch(url)
+          if (!og?.title || !bubble.isConnected) continue
+          const a = document.createElement('a')
+          a.className = 'og'
+          a.href = url
+          a.target = '_blank'
+          if (og.image && /^https?:/.test(og.image)) {
+            const img = document.createElement('img')
+            img.src = og.image
+            img.onerror = () => img.remove()
+            a.appendChild(img)
+          }
+          const box = document.createElement('div')
+          box.className = 'ogbox'
+          const ti = document.createElement('div')
+          ti.className = 'ogt'
+          ti.textContent = decodeEntities(og.title)
+          box.appendChild(ti)
+          if (og.description) {
+            const d = document.createElement('div')
+            d.className = 'ogd'
+            d.textContent = decodeEntities(og.description)
+            box.appendChild(d)
+          }
+          const h = document.createElement('div')
+          h.className = 'ogh'
+          h.textContent = og.host
+          box.appendChild(h)
+          a.appendChild(box)
+          bubble.appendChild(a)
+          report(true)
+          stick()
+        }
+      }
+
+      // --- scroll: stick to the bottom unless the user scrolled away ---
+      const nearBottom = () => log.scrollHeight - log.scrollTop - log.clientHeight < 48
+      const stick = (force) => {
+        if (force || sticky) log.scrollTop = log.scrollHeight
+      }
+      let sticky = true
+      log.addEventListener('scroll', () => (sticky = nearBottom()))
+
+      // --- window height follows content, up to main's cap; then we scroll ---
+      // Resizing moves the whole window (it grows upward from an anchored
+      // bottom), so it must be calm: frozen while tokens stream in, throttled
+      // and thresholded otherwise.
+      let streaming = false
+      let lastH = 0
+      let lastT = 0
+      let pend = null
+      const contentH = () => log.scrollHeight + bar.offsetHeight + row.offsetHeight + 22
+      function report(force) {
+        if (streaming && !force) return
+        const want = Math.min(600, contentH())
+        if (Math.abs(want - lastH) < 12) return
+        const fire = () => {
+          lastH = Math.min(600, contentH())
+          lastT = performance.now()
+          window.widget.chatSize(lastH)
+          stick()
+        }
+        const since = performance.now() - lastT
+        if (since > 150) fire()
+        else if (!pend) pend = setTimeout(() => ((pend = null), fire()), 160 - since)
+      }
+
+      const MAX_KEPT = 80
       function addBubble(cls, text) {
+        const wasNear = nearBottom()
         const b = document.createElement('div')
         b.className = `bubble ${cls}`
         b.textContent = text
-        stack.insertBefore(b, row)
-        // retail: only the newest homie bubble gets the tail
-        for (const h of stack.querySelectorAll('.homie.tailed')) h.classList.remove('tailed')
-        if (cls.includes('homie')) b.classList.add('tailed')
-        const extra = stack.querySelectorAll('.bubble:not(.gone)').length - MAX_BUBBLES
-        if (extra > 0) {
-          for (const old of [...stack.querySelectorAll('.bubble:not(.gone)')].slice(0, extra)) {
-            old.classList.add('gone')
-            setTimeout(() => old.remove(), 550)
-          }
-        }
+        for (const h of log.querySelectorAll('.bot.tailed')) h.classList.remove('tailed')
+        if (cls.includes('bot')) b.classList.add('tailed')
+        log.appendChild(b)
+        while (log.children.length > MAX_KEPT) log.firstChild.remove()
+        updateBar()
+        report()
+        stick(wasNear)
         return b
       }
 
+      document.querySelector('#clearBtn').addEventListener('click', () => {
+        clearTyping()
+        streamBubble = null
+        streaming = false
+        log.replaceChildren()
+        window.widget.resetThread() // next message starts from the default thread
+        updateBar()
+        lastH = 0
+        report(true)
+        input.focus()
+      })
+
       let typing = null
+      let typingTimer = null
       function showTyping() {
-        typing = addBubble('homie tailed', '')
+        typing = addBubble('bot tailed', '')
         const d = document.createElement('span')
         d.className = 'dots'
         d.innerHTML = '<i></i><i></i><i></i>'
-        typing.appendChild(d)
+        const tick = document.createElement('span')
+        tick.className = 'tick'
+        typing.append(d, tick)
+        const started = performance.now()
+        clearInterval(typingTimer)
+        typingTimer = setInterval(() => {
+          const s = (performance.now() - started) / 1000
+          tick.textContent = s < 10 ? s.toFixed(1) + 's' : Math.round(s) + 's'
+        }, 100)
+      }
+      function clearTyping() {
+        clearInterval(typingTimer)
+        typingTimer = null
+        typing?.remove()
+        typing = null
       }
 
       function typewrite(el, text) {
         el.textContent = ''
+        streaming = true // hold the window still while letters land
         let i = 0
         const tick = () => {
           el.textContent = text.slice(0, ++i)
+          stick()
           if (i < text.length) setTimeout(tick, 18 + Math.random() * 30)
+          else {
+            el.innerHTML = renderMd(text)
+            el.classList.add('rich')
+            attachOg(el)
+            streaming = false
+            report(true)
+            stick(true)
+          }
         }
         tick()
       }
 
+      // --- input: Enter sends, Shift+Enter newlines, grows to ~4 lines ---
+      const grow = () => {
+        input.style.height = 'auto'
+        input.style.height = Math.min(input.scrollHeight, 96) + 'px'
+        report()
+      }
+      input.addEventListener('input', grow)
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') return window.widget.closeChat()
-        if (e.key !== 'Enter') return
+        if (e.key !== 'Enter' || e.shiftKey) return
+        e.preventDefault()
         const text = input.value.trim()
         if (!text) return
         input.value = ''
+        grow()
         addBubble('me', text)
         showTyping()
         window.widget.chatSend(text)
       })
 
+      // live tokens from the platform stream straight into one bubble; the
+      // window holds still and the log scrolls until the turn is over
+      let streamBubble = null
+      window.widget.onChatDelta(({ text }) => {
+        streaming = true
+        clearTyping()
+        if (!streamBubble) streamBubble = addBubble('bot tailed', '')
+        streamBubble.textContent += text
+        stick()
+      })
+
       window.widget.onChatReply(({ text }) => {
-        if (typing) {
-          typing.remove()
-          typing = null
+        streaming = false
+        clearTyping()
+        if (streamBubble) {
+          // the final `response` frame is the source of truth
+          streamBubble.innerHTML = renderMd(text)
+          streamBubble.classList.add('rich')
+          attachOg(streamBubble)
+          streamBubble = null
+          report(true)
+          stick(true)
+        } else {
+          typewrite(addBubble('bot tailed', ''), text)
         }
-        const b = addBubble('homie tailed', '')
-        typewrite(b, text)
+        input.focus()
+      })
+
+      window.widget.onChatError(({ text }) => {
+        streaming = false
+        clearTyping()
+        streamBubble = null // keep whatever partially streamed; the error explains the cut
+        addBubble('err', text)
+        report(true)
+        stick(true)
+        input.focus()
+      })
+
+      // a full thread from the server replaces the log — the conversation is
+      // the store, this is just a render of it
+      window.widget.onChatHistory(({ messages }) => {
+        streaming = false
+        streamBubble = null
+        clearTyping()
+        log.replaceChildren()
+        for (const msg of messages) {
+          const cls = msg.role === 'user' ? 'me' : 'bot'
+          const b = document.createElement('div')
+          b.className = `bubble ${cls}`
+          b.style.animation = 'none' // bulk render, no per-bubble pop
+          if (cls === 'bot') {
+            b.innerHTML = renderMd(msg.content || '')
+            b.classList.add('rich')
+          } else b.textContent = msg.content || ''
+          log.appendChild(b)
+        }
+        const last = log.querySelector('.bot:last-of-type')
+        if (last) last.classList.add('tailed')
+        // OG cards only for the freshest couple of bot messages, not 100 fetches
+        for (const b of [...log.querySelectorAll('.bot')].slice(-2)) attachOg(b)
+        while (log.children.length > MAX_KEPT) log.firstChild.remove()
+        updateBar()
+        report(true)
+        stick(true)
         input.focus()
       })
 
       window.widget.onChatFocus(() => input.focus())
       input.focus()
+      report()
     </script>
   </body>
 </html>

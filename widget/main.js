@@ -2,9 +2,20 @@ const { app, BrowserWindow, screen, ipcMain } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const brain = require('./brain')
+const bridge = require('./bridge')
 
 const SIZE = 180
-const DEFAULTS = { skin: '#16181a', ink: '#e9ebec', pupils: false, mood: 'auto' }
+const ICON = path.join(__dirname, '..', 'docs', 'logo.png')
+const DEFAULTS = {
+  skin: '#16181a',
+  ink: '#e9ebec',
+  pupils: false,
+  mood: 'auto',
+  server: 'wss://bwnd.app/api/v1/incubators/public/bbots/ws',
+  token: '', // the bbk_… device key
+  incubator: '', // which of the user's incubators this bbot stands in for
+  autoConnect: false,
+}
 
 const cfgPath = () => path.join(app.getPath('userData'), 'widget-config.json')
 let cfg = { ...DEFAULTS }
@@ -19,6 +30,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: SIZE,
     height: SIZE,
+    icon: ICON,
     transparent: true,
     frame: false,
     resizable: true,
@@ -57,6 +69,16 @@ function createWindow() {
         width: size,
         height: size,
       })
+    } else if (moving) {
+      // manual drag: the face is clickable, so the OS drag region is gone.
+      // Full bounds with the size captured at drag start — setPosition alone
+      // lets DPI rounding drift the size a pixel per tick.
+      win.setBounds({
+        x: Math.round(p.x - moving.dx),
+        y: Math.round(p.y - moving.dy),
+        width: moving.w,
+        height: moving.h,
+      })
     }
     win.webContents.send('cursor', { x: p.x - cx, y: p.y - cy })
   }, 33)
@@ -67,8 +89,8 @@ function createWindow() {
   })
 }
 
-// --- chat: a transparent bubble window anchored above homie ---
-const CHAT_W = 300
+// --- chat: a transparent bubble window anchored above the face ---
+const CHAT_W = 320
 let chat = null
 let chatH = 60
 
@@ -88,9 +110,11 @@ function toggleChat() {
     chat.close()
     return
   }
+  chatH = 60 // a fresh chat starts compact; the page reports real size
   chat = new BrowserWindow({
     width: CHAT_W,
     height: chatH,
+    icon: ICON,
     transparent: true,
     frame: false,
     resizable: false,
@@ -105,9 +129,16 @@ function toggleChat() {
   })
   chat.setAlwaysOnTop(true, 'screen-saver')
   chat.loadFile('chat.html')
+  // links in replies open in the real browser, never in-widget
+  chat.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/.test(url)) require('electron').shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  chat.webContents.on('will-navigate', (e) => e.preventDefault())
   chat.once('ready-to-show', () => {
     positionChat()
     chat.webContents.send('chat-focus')
+    openThread() // a pending notification opens straight into its thread
   })
   chat.on('closed', () => {
     chat = null
@@ -121,8 +152,8 @@ function toggleSettings() {
     settings.close()
     return
   }
-  const W = 380
-  const H = 590
+  const W = 430
+  const H = 620
   const b = win.getBounds()
   const area = screen.getDisplayMatching(b).workArea
   let x = b.x + b.width + 14
@@ -135,6 +166,7 @@ function toggleSettings() {
     height: H,
     x,
     y,
+    icon: ICON,
     transparent: true,
     frame: false,
     resizable: false,
@@ -147,22 +179,79 @@ function toggleSettings() {
     },
   })
   settings.loadFile('settings.html')
+  settings.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/.test(url)) require('electron').shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  settings.webContents.on('will-navigate', (e) => e.preventDefault())
   settings.on('closed', () => (settings = null))
 }
 
 let resizing = false
+let moving = null // {dx, dy}: cursor offset into the window while face-dragging
 let adjusting = false
 let adjustTimer
 
 const broadcast = () => {
-  for (const w of [win, settings]) {
-    if (w && !w.isDestroyed()) w.webContents.send('cfg', cfg)
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send('cfg', cfg)
   }
 }
+
+bridge.on('status', (s) => {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send('bridge-status', s)
+  }
+})
+bridge.on('hello', ({ user, incubators }) => {
+  // keep the chosen incubator valid; default to the first one
+  if (incubators.length && !incubators.some((i) => i.id === cfg.incubator)) {
+    cfg = { ...cfg, incubator: incubators[0].id }
+    try {
+      fs.writeFileSync(cfgPath(), JSON.stringify(cfg))
+    } catch {}
+    broadcast()
+  }
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send('hello', { user, incubators })
+  }
+})
+
+// --- notifications: events are pointers; the conversation is the store ---
+let lastNotif = null // most recent {kind, incubator_id, conversation_id, from}
+
+async function openThread() {
+  if (!lastNotif || bridge.status !== 'on') return
+  const notif = lastNotif
+  try {
+    const h = await bridge.history(notif.conversation_id)
+    lastNotif = null
+    if (notif.incubator_id && notif.incubator_id !== cfg.incubator) {
+      cfg = { ...cfg, incubator: notif.incubator_id }
+      try {
+        fs.writeFileSync(cfgPath(), JSON.stringify(cfg))
+      } catch {}
+      broadcast()
+    }
+    toChat('chat-history', { title: h.title, messages: h.messages || [] })
+    toWin('notify-clear')
+  } catch (err) {
+    toChat('chat-error', { text: `couldn't load the thread: ${err?.message || 'unknown'}` })
+  }
+}
+
+bridge.on('notify', (n) => {
+  lastNotif = n
+  toWin('notify', { from: n.from || 'a bot', kind: n.kind })
+  // if the user is already looking at the chat, pull the thread in live
+  if (chat && !chat.isDestroyed()) openThread()
+})
 
 ipcMain.handle('get-cfg', () => cfg)
 ipcMain.handle('get-size', () => (win && !win.isDestroyed() ? win.getBounds().width : SIZE))
 ipcMain.on('set-cfg', (_e, patch) => {
+  // switching bots switches threads
+  if (patch.incubator && patch.incubator !== cfg.incubator) bridge.resetThread()
   cfg = { ...cfg, ...patch }
   try {
     fs.writeFileSync(cfgPath(), JSON.stringify(cfg))
@@ -188,20 +277,118 @@ ipcMain.on('set-size', (_e, size) => {
 })
 ipcMain.on('resize-start', () => (resizing = true))
 ipcMain.on('resize-end', () => (resizing = false))
+ipcMain.on('move-start', () => {
+  if (!win || win.isDestroyed()) return
+  const p = screen.getCursorScreenPoint()
+  const b = win.getBounds()
+  moving = { dx: p.x - b.x, dy: p.y - b.y, w: b.width, h: b.height }
+})
+ipcMain.on('move-end', () => (moving = null))
 ipcMain.on('toggle-settings', toggleSettings)
 ipcMain.on('toggle-chat', toggleChat)
+ipcMain.on('bridge-connect', () => bridge.connect(cfg.server, cfg.token))
+ipcMain.on('bridge-disconnect', () => bridge.disconnect())
+ipcMain.handle('get-bridge-status', () => bridge.status)
 ipcMain.on('close-chat', () => chat?.close())
 ipcMain.on('chat-size', (_e, h) => {
-  chatH = Math.max(60, Math.min(420, Math.round(h)))
+  const next = Math.max(60, Math.min(600, Math.round(h)))
+  if (Math.abs(next - chatH) < 8) return
+  chatH = next
   positionChat()
 })
+const toChat = (ch, p) => chat && !chat.isDestroyed() && chat.webContents.send(ch, p)
+const toWin = (ch, p) => win && !win.isDestroyed() && win.webContents.send(ch, p)
+
 ipcMain.on('chat-send', async (_e, text) => {
-  if (win && !win.isDestroyed()) win.webContents.send('chat-state', { state: 'thinking' })
-  const r = await brain.reply(String(text).slice(0, 280))
-  if (chat && !chat.isDestroyed()) chat.webContents.send('chat-reply', { text: r.text })
-  if (win && !win.isDestroyed())
-    win.webContents.send('chat-state', { state: 'reply', mood: r.mood, react: r.react })
+  const msg = String(text).slice(0, 2000)
+
+  // no fake answers: chat only works over the bridge
+  if (bridge.status !== 'on' || !cfg.incubator) {
+    toChat('chat-error', {
+      text:
+        bridge.status === 'denied'
+          ? 'key rejected — mint a new one in Tension and update it in settings'
+          : 'not connected — open settings and connect to bwnd',
+    })
+    toWin('chat-state', { state: 'error' })
+    return
+  }
+
+  toWin('chat-state', { state: 'thinking' })
+  try {
+    let streaming = false
+    const final = await bridge.chat(cfg.incubator, msg, (ev) => {
+      if (ev.type === 'delta') {
+        if (!streaming) {
+          streaming = true
+          toWin('chat-state', { state: 'streaming' })
+        }
+        toChat('chat-delta', { text: ev.content })
+      }
+      if (ev.type === 'tool') toWin('chat-state', { state: 'tool' })
+    })
+    toChat('chat-reply', { text: final }) // `response` is the source of truth
+    toWin('chat-state', { state: 'reply', ...brain.inferMood(final) })
+  } catch (err) {
+    const why =
+      err?.message === 'timeout'
+        ? 'timed out waiting for a reply'
+        : err?.message === 'disconnected' || err?.message === 'offline'
+          ? 'connection lost mid-reply'
+          : err?.message || 'something broke'
+    toChat('chat-error', { text: why })
+    toWin('chat-state', { state: 'error' })
+  }
 })
+ipcMain.on('refresh-bots', () => bridge.refreshBots())
+ipcMain.on('reset-thread', () => bridge.resetThread())
+
+// --- OG link previews: fetched here, cached per session ---
+const ogCache = new Map()
+ipcMain.handle('og-fetch', async (_e, url) => {
+  try {
+    const u = new URL(url)
+    if (!/^https?:$/.test(u.protocol)) return null
+    if (ogCache.has(url)) return ogCache.get(url)
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 6000)
+    const res = await require('electron').net.fetch(url, {
+      signal: ctrl.signal,
+      redirect: 'follow',
+    })
+    clearTimeout(timer)
+    if (!res.ok || !(res.headers.get('content-type') || '').includes('text/html'))
+      throw new Error('not a page')
+    const html = (await res.text()).slice(0, 300000)
+    const meta = (name) =>
+      html.match(
+        new RegExp(`<meta[^>]+(?:property|name)=["']${name}["'][^>]*content=["']([^"']+)["']`, 'i')
+      )?.[1] ??
+      html.match(
+        new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["']${name}["']`, 'i')
+      )?.[1] ??
+      null
+    const title = meta('og:title') || html.match(/<title[^>]*>([^<]{1,200})/i)?.[1] || null
+    const out = title
+      ? {
+          title: title.trim(),
+          description: (meta('og:description') || meta('description') || '').slice(0, 200),
+          image: meta('og:image'),
+          host: u.host,
+        }
+      : null
+    ogCache.set(url, out)
+    return out
+  } catch {
+    ogCache.set(url, null)
+    return null
+  }
+})
+ipcMain.handle('get-hello', () => ({
+  status: bridge.status,
+  user: bridge.user,
+  incubators: bridge.incubators,
+}))
 ipcMain.on('quit', () => app.quit())
 
 if (!app.requestSingleInstanceLock()) {
@@ -210,6 +397,9 @@ if (!app.requestSingleInstanceLock()) {
   app.on('second-instance', () => {
     if (win && !win.isDestroyed()) win.focus()
   })
-  app.whenReady().then(createWindow)
+  app.whenReady().then(() => {
+    createWindow()
+    if (cfg.autoConnect && cfg.server) bridge.connect(cfg.server, cfg.token)
+  })
   app.on('window-all-closed', () => app.quit())
 }

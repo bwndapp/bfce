@@ -6,9 +6,13 @@
   "type": "commonjs",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dev-server": "node dev-server.js"
   },
   "devDependencies": {
     "electron": "^33.0.0"
+  },
+  "dependencies": {
+    "ws": "^8.21.3"
   }
 }

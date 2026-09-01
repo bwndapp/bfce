@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>homie settings</title>
+    <title>bbot settings</title>
     <style>
       :root {
         --bg: rgba(14, 16, 19, 0.97);
@@ -67,8 +67,72 @@
         background: var(--chip-hover);
         color: #fff;
       }
+      /* left tab rail */
+      #body {
+        flex: 1;
+        display: flex;
+        min-height: 0;
+      }
+      nav {
+        width: 62px;
+        flex: none;
+        border-right: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 10px 7px;
+      }
+      .tab {
+        position: relative;
+        border: none;
+        background: none;
+        border-radius: 10px;
+        color: var(--dim);
+        padding: 12px 2px;
+        display: flex;
+        justify-content: center;
+        cursor: pointer;
+        font: 600 10px system-ui, sans-serif;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .tab:hover {
+        background: var(--chip);
+        color: var(--text);
+      }
+      .tab.active {
+        background: rgba(138, 180, 255, 0.12);
+        color: var(--accent);
+      }
+      .tabdot {
+        position: absolute;
+        top: 6px;
+        right: 8px;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--dim);
+        transition: background 0.2s;
+      }
+      .tabdot.on {
+        background: #5dd39e;
+        box-shadow: 0 0 6px #5dd39e;
+      }
+      .tabdot.connecting {
+        background: #ffd166;
+        animation: pulse 1s infinite;
+      }
+      .tabdot.denied {
+        background: #ff6b6b;
+      }
+      @keyframes pulse {
+        50% {
+          opacity: 0.35;
+        }
+      }
       main {
         flex: 1;
+        min-width: 0;
         overflow-y: auto;
         padding: 12px 14px 16px;
         display: flex;
@@ -81,6 +145,14 @@
       main::-webkit-scrollbar-thumb {
         background: rgba(255, 255, 255, 0.12);
         border-radius: 4px;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      .pane {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
       }
       section > h2 {
         margin: 0 0 7px;
@@ -158,7 +230,6 @@
       .cell.selected .name {
         color: var(--accent);
       }
-      /* rows of chips */
       .chips {
         display: flex;
         flex-wrap: wrap;
@@ -215,10 +286,80 @@
         cursor: pointer;
         color: var(--text);
       }
-      /* size */
       input[type='range'] {
         width: 100%;
         accent-color: var(--accent);
+      }
+      select {
+        background: #1c1f22;
+        color: var(--text);
+        border: 1px solid #333;
+        border-radius: 5px;
+        font: inherit;
+        max-width: 90px;
+      }
+      /* config pane */
+      .field-input {
+        flex: 1;
+        box-sizing: border-box;
+        background: #1c1f22;
+        border: 1px solid #33383d;
+        border-radius: 7px;
+        color: var(--text);
+        font: 11px system-ui, sans-serif;
+        padding: 6px 9px;
+        outline: none;
+        min-width: 0;
+      }
+      .field-input:focus {
+        border-color: var(--accent);
+      }
+      .conn-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      #go {
+        border: none;
+        border-radius: 999px;
+        padding: 6px 16px;
+        font: 600 11px system-ui, sans-serif;
+        cursor: pointer;
+        background: var(--accent);
+        color: #0c0e11;
+      }
+      #go:hover {
+        filter: brightness(1.1);
+      }
+      #go.on {
+        background: var(--chip);
+        color: var(--text);
+        border: 1px solid var(--line);
+      }
+      #connStatus {
+        font-size: 10.5px;
+        color: var(--dim);
+      }
+      #connStatus b {
+        color: var(--text);
+      }
+      #bot {
+        flex: 1;
+        max-width: none;
+        padding: 5px 8px;
+      }
+      .hint {
+        font-size: 10.5px;
+        color: var(--dim);
+        line-height: 1.5;
+      }
+      .hint a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .hint a:hover {
+        text-decoration: underline;
       }
     </style>
   </head>
@@ -226,36 +367,73 @@
     <div id="card">
       <header>
         <div class="dot" id="headFace"></div>
-        <h1>homie</h1>
+        <h1>bbot</h1>
         <button id="x" title="Close">✕</button>
       </header>
-      <main>
-        <section>
-          <h2>Mood</h2>
-          <div id="autoChip">
-            <button class="chip" id="auto" title="Wanders between moods on its own">✨ auto</button>
+      <div id="body">
+        <nav>
+          <button class="tab active" data-tab="custom">style</button>
+          <button class="tab" data-tab="config">config<span class="tabdot" id="tabDot"></span></button>
+        </nav>
+        <main>
+          <div class="pane" id="pane-custom">
+            <section>
+              <h2>Mood</h2>
+              <div id="autoChip">
+                <button class="chip" id="auto" title="Wanders between moods on its own">auto</button>
+              </div>
+              <div id="grid"></div>
+            </section>
+            <section>
+              <h2>Poke</h2>
+              <div class="chips" id="reactions"></div>
+            </section>
+            <section>
+              <h2>Colors</h2>
+              <div class="crow"><span class="lbl">skin</span><span class="chips" id="skins"></span></div>
+              <div class="crow"><span class="lbl">eyes</span><span class="chips" id="inks"></span></div>
+              <label class="toggle"><input type="checkbox" id="pupils" /> pupils</label>
+            </section>
+            <section>
+              <h2>Fits</h2>
+              <div class="chips" id="presets"></div>
+            </section>
+            <section>
+              <h2>Size</h2>
+              <input type="range" id="size" min="80" max="800" step="4" />
+            </section>
           </div>
-          <div id="grid"></div>
-        </section>
-        <section>
-          <h2>Poke</h2>
-          <div class="chips" id="reactions"></div>
-        </section>
-        <section>
-          <h2>Colors</h2>
-          <div class="crow"><span class="lbl">skin</span><span class="chips" id="skins"></span></div>
-          <div class="crow"><span class="lbl">eyes</span><span class="chips" id="inks"></span></div>
-          <label class="toggle"><input type="checkbox" id="pupils" /> pupils</label>
-        </section>
-        <section>
-          <h2>Fits</h2>
-          <div class="chips" id="presets"></div>
-        </section>
-        <section>
-          <h2>Size</h2>
-          <input type="range" id="size" min="80" max="800" step="4" />
-        </section>
-      </main>
+          <div class="pane" id="pane-config" hidden>
+            <section>
+              <h2>Connection</h2>
+              <div class="crow"><span class="lbl">server</span><input class="field-input" type="text" id="server" placeholder="wss://bwnd.app/api/v1/incubators/public/bbots/ws" spellcheck="false" /></div>
+              <div class="crow"><span class="lbl">key</span><input class="field-input" type="password" id="token" placeholder="bbk_… (Tension → Settings → Desktop widgets)" spellcheck="false" /></div>
+              <div class="crow" id="botRow" hidden><span class="lbl">bot</span><select id="bot"></select></div>
+              <div class="conn-row">
+                <label class="toggle"><input type="checkbox" id="auto-connect" /> connect on launch</label>
+                <span style="flex: 1"></span>
+                <button id="go">connect</button>
+              </div>
+              <div class="conn-row"><span id="connStatus"><b>offline</b> — chat is disabled until connected</span></div>
+            </section>
+            <section>
+              <h2>About</h2>
+              <div class="hint">
+                A bbot stands in for one of your Tension incubators over a single
+                WebSocket. Chat threads are shared with the Tension web UI. Chat
+                needs the connection — offline sends show an error.
+                Local testing: <code>npm run dev-server</code> →
+                <code>ws://localhost:8787</code>, any key.
+              </div>
+              <div class="hint" style="margin-top: 8px">
+                No account yet? Bots live at
+                <a href="https://bwnd.app" target="_blank" id="bwndLink">bwnd.app</a>
+                — sign up, spin up an incubator, and mint a widget key.
+              </div>
+            </section>
+          </div>
+        </main>
+      </div>
     </div>
 
     <script type="module">
@@ -263,6 +441,15 @@
 
       const $ = (s) => document.querySelector(s)
       let cfg = await window.widget.getCfg()
+
+      // --- tabs ---
+      for (const tab of document.querySelectorAll('.tab')) {
+        tab.addEventListener('click', () => {
+          for (const t of document.querySelectorAll('.tab')) t.classList.toggle('active', t === tab)
+          $('#pane-custom').hidden = tab.dataset.tab !== 'custom'
+          $('#pane-config').hidden = tab.dataset.tab !== 'config'
+        })
+      }
 
       const luminance = (hex) => {
         const n = parseInt(hex.slice(1), 16)
@@ -386,6 +573,63 @@
       const size = $('#size')
       size.value = await window.widget.getSize()
       size.addEventListener('input', () => window.widget.setSize(+size.value))
+
+      // --- config: connection ---
+      $('#server').value = cfg.server || ''
+      $('#token').value = cfg.token || ''
+      $('#auto-connect').checked = !!cfg.autoConnect
+      $('#server').addEventListener('change', () => window.widget.setCfg({ server: $('#server').value.trim() }))
+      $('#token').addEventListener('change', () => window.widget.setCfg({ token: $('#token').value.trim() }))
+      $('#auto-connect').addEventListener('change', (e) => window.widget.setCfg({ autoConnect: e.target.checked }))
+
+      let connStatus = 'off'
+      let connUser = null
+      function renderConn() {
+        $('#tabDot').className = `tabdot ${connStatus}`
+        $('#go').classList.toggle('on', connStatus === 'on' || connStatus === 'connecting')
+        $('#go').textContent = connStatus === 'on' || connStatus === 'connecting' ? 'disconnect' : 'connect'
+        $('#connStatus').innerHTML =
+          connStatus === 'on'
+            ? `<b>connected</b>${connUser?.email ? ' as ' + connUser.email : ''} — bots speak for themselves now`
+            : connStatus === 'connecting'
+              ? '<b>connecting…</b> retrying until it sticks'
+              : connStatus === 'denied'
+                ? '<b>key rejected</b> — revoke &amp; mint a new one in Tension'
+                : '<b>offline</b> — chat is disabled until connected'
+      }
+
+      function renderBots(incubators) {
+        const sel = $('#bot')
+        $('#botRow').hidden = !incubators.length
+        sel.replaceChildren()
+        for (const inc of incubators) {
+          const o = document.createElement('option')
+          o.value = inc.id
+          o.textContent = inc.name + (inc.container_running ? '' : ' (asleep)')
+          sel.appendChild(o)
+        }
+        if (incubators.some((i) => i.id === cfg.incubator)) sel.value = cfg.incubator
+      }
+      $('#bot').addEventListener('change', () => window.widget.setCfg({ incubator: $('#bot').value }))
+
+      $('#go').addEventListener('click', () => {
+        // commit any un-blurred edits before connecting
+        window.widget.setCfg({ server: $('#server').value.trim(), token: $('#token').value.trim() })
+        if (connStatus === 'on' || connStatus === 'connecting') window.widget.bridgeDisconnect()
+        else window.widget.bridgeConnect()
+      })
+      window.widget.onBridgeStatus((s) => ((connStatus = s), renderConn()))
+      window.widget.onHello(({ user, incubators }) => {
+        connUser = user
+        renderBots(incubators)
+        renderConn()
+      })
+      const hello = await window.widget.getHello()
+      connStatus = hello.status
+      connUser = hello.user
+      renderBots(hello.incubators || [])
+      renderConn()
+      if (hello.status === 'on') window.widget.refreshBots() // roster may have changed
 
       // --- sync ---
       window.widget.onCfg((c) => {

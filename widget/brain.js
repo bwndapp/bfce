@@ -1,4 +1,4 @@
-// homie's stand-in brain: canned personality + command parsing.
+// a bbot's stand-in brain: canned personality + command parsing.
 // The platform hookup replaces exactly one function — reply(text) resolves
 // {text, mood?, react?} — so a WebSocket to an agent slots in here without
 // touching the chat UI or the face choreography.
@@ -16,7 +16,7 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
 const RULES = [
   {
     match: /\b(hi|hello|hey|yo|sup|hiya|howdy)\b/,
-    replies: ['heyyy', 'yo!', 'sup 👀', 'oh hi!!', 'you came back'],
+    replies: ['heyyy', 'yo!', 'sup', 'oh hi!!', 'you came back'],
     mood: 'happy',
     react: 'bounce',
   },
@@ -37,7 +37,7 @@ const RULES = [
   },
   {
     match: /\bdance\b|\bparty\b/,
-    replies: ['🕺', 'watch this', 'my time to shine'],
+    replies: ['watch this', 'my time to shine'],
     mood: 'excited',
     react: 'spin',
   },
@@ -59,11 +59,18 @@ const RULES = [
   {
     match: /\b(who|what) are (you|u)\b/,
     replies: [
-      'i\'m homie. i live here now',
+      'i\'m a bbot. i live here now',
       'a face. professionally',
       'two eyes and a dream',
     ],
     mood: 'smug',
+  },
+  {
+    match: /\b(test ?md|markdown)\b/,
+    replies: [
+      '### markdown check\n\nsome **bold**, some *italic*, some ~~regret~~, and `inline code`.\n\n- a list item\n- another with a [link](https://bwnd.app)\n- bare url: https://github.com/bwndapp/bbot\n\n1. ordered\n2. works too\n\n> a wise quote\n\n```js\nconst face = createFace(el)\nface.react("boing")\n```\n\n---\n\nthat is everything i know',
+    ],
+    mood: 'focus',
   },
   {
     match: /\bhelp\b/,
@@ -75,7 +82,7 @@ const RULES = [
   },
   {
     match: /\b(thanks|thank you|thx|ty)\b/,
-    replies: ['anytime', 'that\'s what i\'m here for', '🫡'],
+    replies: ['anytime', 'that\'s what i\'m here for'],
     mood: 'content',
     react: 'nod',
   },
@@ -94,10 +101,10 @@ async function reply(text) {
   // thinking time scales a little with input, feels less canned
   await new Promise((r) => setTimeout(r, 450 + Math.random() * 800 + Math.min(t.length * 8, 600)))
 
-  // direct commands: name a reaction or an expression and homie obeys
+  // direct commands: name a reaction or an expression and the bot obeys
   const react = REACTIONS.find((r) => new RegExp(`\\b${r}\\b`).test(t))
   const mood = EXPRESSIONS.find((e) => new RegExp(`\\b${e}\\b`).test(t))
-  if (react && !mood) return { text: pick(['say less', 'like this?', '👇']), react }
+  if (react && !mood) return { text: pick(['say less', 'like this?', 'watch']), react }
   if (mood) return { text: pick(['mood', 'how\'s this', 'okok']), mood, react }
 
   for (const rule of RULES) {
@@ -118,4 +125,17 @@ async function reply(text) {
   return { text: pick(f.replies), mood: f.mood, react: f.react }
 }
 
-module.exports = { reply }
+// Guess a face for a piece of text the platform wrote — the socket carries
+// words, not moods, so the bot reads the room itself.
+function inferMood(text) {
+  const t = String(text).toLowerCase()
+  if (/error|fail|sorry|can't|cannot|unable/.test(t)) return { mood: 'worried' }
+  if (/\bdone\b|finished|deployed|fixed|complete/.test(t)) return { mood: 'happy', react: 'nod' }
+  if (/[!]{2,}|🎉|amazing|awesome/.test(t)) return { mood: 'excited', react: 'pop' }
+  if (/\?$/.test(t.trim())) return { mood: 'curious' }
+  if (/hmm|thinking|let me|maybe/.test(t)) return { mood: 'thinking' }
+  if (/haha|lol|😄|😂/.test(t)) return { mood: 'joy', react: 'bounce' }
+  return { mood: 'content' }
+}
+
+module.exports = { reply, inferMood }
