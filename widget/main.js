@@ -1,6 +1,7 @@
 const { app, BrowserWindow, screen, ipcMain } = require('electron')
 const path = require('path')
 const fs = require('fs')
+const brain = require('./brain')
 
 const SIZE = 180
 const DEFAULTS = { skin: '#16181a', ink: '#e9ebec', pupils: false, mood: 'auto' }
@@ -62,7 +63,57 @@ function createWindow() {
 
   win.on('move', () => {
     if (!win.isDestroyed() && !resizing && !adjusting) win.webContents.send('dragging')
+    positionChat()
   })
+}
+
+// --- chat: a transparent bubble window anchored above homie ---
+const CHAT_W = 300
+let chat = null
+let chatH = 60
+
+function positionChat() {
+  if (!chat || chat.isDestroyed() || !win || win.isDestroyed()) return
+  const b = win.getBounds()
+  const area = screen.getDisplayMatching(b).workArea
+  let x = Math.round(b.x + b.width / 2 - CHAT_W / 2)
+  x = Math.max(area.x, Math.min(x, area.x + area.width - CHAT_W))
+  let y = b.y - chatH - 6
+  if (y < area.y) y = b.y + b.height + 6 // no room above — sit below
+  chat.setBounds({ x, y, width: CHAT_W, height: chatH })
+}
+
+function toggleChat() {
+  if (chat && !chat.isDestroyed()) {
+    chat.close()
+    return
+  }
+  chat = new BrowserWindow({
+    width: CHAT_W,
+    height: chatH,
+    transparent: true,
+    frame: false,
+    resizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    alwaysOnTop: true,
+    hasShadow: false,
+    skipTaskbar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+    },
+  })
+  chat.setAlwaysOnTop(true, 'screen-saver')
+  chat.loadFile('chat.html')
+  chat.once('ready-to-show', () => {
+    positionChat()
+    chat.webContents.send('chat-focus')
+  })
+  chat.on('closed', () => {
+    chat = null
+    if (win && !win.isDestroyed()) win.webContents.send('chat-state', { state: 'end' })
+  })
+  if (win && !win.isDestroyed()) win.webContents.send('chat-state', { state: 'open' })
 }
 
 function toggleSettings() {
@@ -138,6 +189,19 @@ ipcMain.on('set-size', (_e, size) => {
 ipcMain.on('resize-start', () => (resizing = true))
 ipcMain.on('resize-end', () => (resizing = false))
 ipcMain.on('toggle-settings', toggleSettings)
+ipcMain.on('toggle-chat', toggleChat)
+ipcMain.on('close-chat', () => chat?.close())
+ipcMain.on('chat-size', (_e, h) => {
+  chatH = Math.max(60, Math.min(420, Math.round(h)))
+  positionChat()
+})
+ipcMain.on('chat-send', async (_e, text) => {
+  if (win && !win.isDestroyed()) win.webContents.send('chat-state', { state: 'thinking' })
+  const r = await brain.reply(String(text).slice(0, 280))
+  if (chat && !chat.isDestroyed()) chat.webContents.send('chat-reply', { text: r.text })
+  if (win && !win.isDestroyed())
+    win.webContents.send('chat-state', { state: 'reply', mood: r.mood, react: r.react })
+})
 ipcMain.on('quit', () => app.quit())
 
 if (!app.requestSingleInstanceLock()) {

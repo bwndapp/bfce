@@ -10,6 +10,11 @@ that floats on your desktop.
 - Hover for controls: **⤡** drag to resize · **✕** close · **✎** customize —
   a settings window with every expression as a live mini-face, reaction
   buttons, colours, presets, and a size slider. Choices persist across runs.
+- **💬 talk to it.** Speech bubbles float above the face and it acts out the
+  conversation — thinking pose with typing dots, a mood matched to each reply.
+  Name any expression or reaction ("act sleepy", "spin") and it obeys. Replies
+  come from a canned personality in `brain.js`; swap its single `reply()`
+  function for a real agent connection and the rest comes along free.
 
 ## Run
 

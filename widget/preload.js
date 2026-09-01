@@ -13,5 +13,12 @@ contextBridge.exposeInMainWorld('widget', {
   resizeStart: () => ipcRenderer.send('resize-start'),
   resizeEnd: () => ipcRenderer.send('resize-end'),
   toggleSettings: () => ipcRenderer.send('toggle-settings'),
+  toggleChat: () => ipcRenderer.send('toggle-chat'),
+  closeChat: () => ipcRenderer.send('close-chat'),
+  chatSize: (h) => ipcRenderer.send('chat-size', h),
+  chatSend: (text) => ipcRenderer.send('chat-send', text),
+  onChatReply: (cb) => ipcRenderer.on('chat-reply', (_e, r) => cb(r)),
+  onChatState: (cb) => ipcRenderer.on('chat-state', (_e, s) => cb(s)),
+  onChatFocus: (cb) => ipcRenderer.on('chat-focus', () => cb()),
   quit: () => ipcRenderer.send('quit'),
 })

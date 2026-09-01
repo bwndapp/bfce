@@ -59,6 +59,11 @@
         left: 4px;
         cursor: pointer;
       }
+      #talk {
+        bottom: 4px;
+        right: 4px;
+        cursor: pointer;
+      }
     </style>
   </head>
   <body>
@@ -66,6 +71,7 @@
     <button id="scale" class="ctl" title="Drag to resize">⤡</button>
     <button id="close" class="ctl" title="Close">✕</button>
     <button id="edit" class="ctl" title="Customize">✎</button>
+    <button id="talk" class="ctl" title="Talk to homie">💬</button>
 
     <script type="module">
       import { createFace } from '../dist/face.js'
@@ -111,6 +117,30 @@
       window.widget.onReact((name) => face.react(name))
 
       document.querySelector('#edit').addEventListener('click', () => window.widget.toggleSettings())
+      document.querySelector('#talk').addEventListener('click', () => window.widget.toggleChat())
+
+      // --- chat choreography: homie acts out the conversation ---
+      let chatTimer
+      let chatting = false
+      window.widget.onChatState(({ state, mood: replyMood, react }) => {
+        clearTimeout(chatTimer)
+        chatting = state !== 'end'
+        if (state === 'open') {
+          face.setExpression('curious')
+          face.react('pop')
+          face.look(0, -0.6, 900) // glance up at the bubble window
+        } else if (state === 'thinking') {
+          face.setExpression('thinking')
+          face.look(-0.4, -0.7, 2500)
+        } else if (state === 'reply') {
+          face.setExpression(replyMood || 'content')
+          if (react) face.react(react)
+          // drift back to his own mood once the moment passes
+          chatTimer = setTimeout(() => face.setExpression(activeMood()), 7000)
+        } else if (state === 'end') {
+          face.setExpression(activeMood())
+        }
+      })
       document.querySelector('#close').addEventListener('click', () => window.widget.quit())
       addEventListener('keydown', (e) => e.key === 'Escape' && window.widget.quit())
 
@@ -150,7 +180,7 @@
       ]
       let mood = 'idle'
       function wander() {
-        if (cfg.mood === 'auto') {
+        if (cfg.mood === 'auto' && !chatting) {
           mood = MOODS[Math.floor(Math.random() * MOODS.length)]
           face.setExpression(mood)
           if (Math.random() < 0.25) face.react(Math.random() < 0.5 ? 'wink' : 'bounce')
