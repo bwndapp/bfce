@@ -436,6 +436,10 @@
                 keys are minted at <a href="https://bwnd.app" target="_blank">bwnd.app</a>
               </div>
             </section>
+            <section>
+              <h2>Startup</h2>
+              <label class="toggle"><input type="checkbox" id="autostart" /> launch when the computer starts</label>
+            </section>
           </div>
         </main>
       </div>
@@ -644,6 +648,10 @@
       renderBots(hello.incubators || [])
       renderConn()
       if (hello.status === 'on') window.widget.refreshBots() // roster may have changed
+
+      // --- startup ---
+      $('#autostart').checked = await window.widget.getAutostart()
+      $('#autostart').addEventListener('change', (e) => window.widget.setAutostart(e.target.checked))
 
       // --- sync ---
       window.widget.onCfg((c) => {

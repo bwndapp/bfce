@@ -31,6 +31,9 @@
       }
       .ctl {
         position: absolute;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         width: 20px;
         height: 20px;
         border: none;
@@ -172,7 +175,11 @@
     <button id="scale" class="ctl" title="Drag to resize">⤡</button>
     <button id="close" class="ctl" title="Close">✕</button>
     <button id="edit" class="ctl" title="Customize">✎</button>
-    <button id="talk" class="ctl" title="Chat">…</button>
+    <button id="talk" class="ctl" title="Chat">
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+        <path d="M3 2h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H8.4l-3 2.5c-.4.35-1 .06-1-.46V12H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" />
+      </svg>
+    </button>
     <div id="peep" hidden>!</div>
     <div id="think" hidden><i></i><i></i><i></i></div>
 
@@ -201,6 +208,8 @@
 
       // --- the face (rebuilt when pupils change; that option is creation-time) ---
       const activeMood = () => (cfg.mood === 'auto' ? mood : cfg.mood)
+      let sleeping = false // system idle > 5 min
+      const restMood = () => (sleeping ? 'sleep' : activeMood())
       let face
       function buildFace() {
         face?.destroy()
@@ -212,13 +221,14 @@
       }
 
       window.widget.onCfg((c) => {
+        activity()
         const rebuild = c.pupils !== cfg.pupils
         cfg = c
         applyColors()
         if (rebuild) buildFace()
-        else face.setExpression(activeMood())
+        else face.setExpression(restMood())
       })
-      window.widget.onReact((name) => face.react(name))
+      window.widget.onReact((name) => (activity(), face.react(name)))
 
       document.querySelector('#edit').addEventListener('click', () => window.widget.toggleSettings())
       document.querySelector('#talk').addEventListener('click', () => window.widget.toggleChat())
@@ -227,6 +237,7 @@
       let pressing = null
       faceEl.addEventListener('pointerdown', (e) => {
         if (e.button !== 0) return
+        activity()
         faceEl.setPointerCapture(e.pointerId)
         pressing = { x: e.screenX, y: e.screenY, moved: false }
       })
@@ -253,6 +264,7 @@
       let chatting = false
       const think = document.querySelector('#think')
       window.widget.onChatState(({ state, mood: replyMood, react }) => {
+        activity()
         clearTimeout(chatTimer)
         chatting = state !== 'end'
         think.hidden = state !== 'thinking' && state !== 'tool'
@@ -272,14 +284,14 @@
         } else if (state === 'error') {
           face.setExpression('worried')
           face.react('shake')
-          chatTimer = setTimeout(() => face.setExpression(activeMood()), 5000)
+          chatTimer = setTimeout(() => face.setExpression(restMood()), 5000)
         } else if (state === 'reply') {
           face.setExpression(replyMood || 'content')
           if (react) face.react(react)
           // drift back to his own mood once the moment passes
-          chatTimer = setTimeout(() => face.setExpression(activeMood()), 7000)
+          chatTimer = setTimeout(() => face.setExpression(restMood()), 7000)
         } else if (state === 'end') {
-          face.setExpression(activeMood())
+          face.setExpression(restMood())
         }
       })
       document.querySelector('#close').addEventListener('click', () => window.widget.quit())
@@ -321,7 +333,7 @@
       ]
       let mood = 'idle'
       function wander() {
-        if (cfg.mood === 'auto' && !chatting) {
+        if (cfg.mood === 'auto' && !chatting && !sleeping) {
           mood = MOODS[Math.floor(Math.random() * MOODS.length)]
           face.setExpression(mood)
           if (Math.random() < 0.25) face.react(Math.random() < 0.5 ? 'wink' : 'bounce')
@@ -330,55 +342,206 @@
       }
       setTimeout(wander, 6000)
 
-      // --- the voice: animalese-ish gibberish shaped by the real text.
-      // Each letter is a pitched blip (vowels ring high and long, consonants
-      // tick low and short, same letter always sounds the same), punctuation
-      // phrases it, and '?' lilts upward. It voices the token stream itself,
-      // so speech lasts exactly as long as the reply is arriving.
+      // --- the voice: syllable-level gibberish speech with real prosody.
+      // Words are split into syllables; each syllable is a shaped note whose
+      // pitch comes from its vowel, its word's identity, word stress, and
+      // where the sentence is (declination, question rise, final fall).
+      // Consonant onsets add articulation: plosives tick, fricatives hiss.
+      // It voices the token stream itself, buffering split words, so speech
+      // lasts exactly as long as the reply is arriving.
       let vctx = null
+      let master = null
+      let noiseBuf = null
       let vt = 0
-      function blipNote(freq, t, dur, peak = 0.07) {
-        // soft sine chirp that bends upward — reads as chirpy, not buzzy
-        const o = vctx.createOscillator()
-        const g = vctx.createGain()
-        o.type = 'sine'
-        o.frequency.setValueAtTime(freq * 0.82, t)
-        o.frequency.exponentialRampToValueAtTime(freq * 1.06, t + dur)
-        g.gain.setValueAtTime(0, t)
-        g.gain.linearRampToValueAtTime(peak, t + 0.007)
-        g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
-        o.connect(g).connect(vctx.destination)
-        o.start(t)
-        o.stop(t + dur + 0.03)
+      let sentencePos = 0 // words since the sentence began — pitch declines
+      let wordBuf = '' // partial word carried between deltas
+
+      function voiceInit() {
+        vctx = new AudioContext()
+        master = vctx.createGain()
+        master.gain.value = 0.9
+        const lp = vctx.createBiquadFilter()
+        lp.type = 'lowpass'
+        lp.frequency.value = 3200
+        master.connect(lp)
+        lp.connect(vctx.destination)
+        noiseBuf = vctx.createBuffer(1, Math.round(vctx.sampleRate * 0.1), vctx.sampleRate)
+        const d = noiseBuf.getChannelData(0)
+        for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1
       }
-      window.widget.onSpeak(({ text }) => {
+
+      const VOWEL_COLOR = { a: 1.0, e: 1.16, i: 1.32, o: 0.88, u: 0.78, y: 1.24 }
+      const hash = (s) => {
+        let h = 9
+        for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 387420489)
+        return ((h >>> 0) % 1000) / 1000
+      }
+
+      function tone(f, t, dur, peak, fallTo) {
+        const o = vctx.createOscillator()
+        const o2 = vctx.createOscillator()
+        const g = vctx.createGain()
+        const g2 = vctx.createGain()
+        o.type = 'triangle'
+        o2.type = 'sine'
+        o.frequency.setValueAtTime(f * 0.95, t)
+        o.frequency.exponentialRampToValueAtTime(fallTo || f * 1.04, t + dur)
+        o2.frequency.setValueAtTime(f * 2, t)
+        o2.frequency.exponentialRampToValueAtTime((fallTo || f) * 2, t + dur)
+        g2.gain.value = 0.18 // soft octave partial for body
+        g.gain.setValueAtTime(0, t)
+        g.gain.linearRampToValueAtTime(peak, t + 0.012)
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.04)
+        o.connect(g)
+        o2.connect(g2)
+        g2.connect(g)
+        g.connect(master)
+        // a touch of vibrato on the longer (stressed) vowels
+        if (dur > 0.062) {
+          const l = vctx.createOscillator()
+          const lg = vctx.createGain()
+          l.frequency.value = 5.5
+          lg.gain.value = f * 0.018
+          l.connect(lg)
+          lg.connect(o.frequency)
+          l.start(t)
+          l.stop(t + dur)
+        }
+        o.start(t)
+        o2.start(t)
+        o.stop(t + dur + 0.06)
+        o2.stop(t + dur + 0.06)
+      }
+
+      function noiseHit(t, dur, kind, peak) {
+        const src = vctx.createBufferSource()
+        src.buffer = noiseBuf
+        const f = vctx.createBiquadFilter()
+        const g = vctx.createGain()
+        f.type = kind === 'hiss' ? 'highpass' : 'bandpass'
+        f.frequency.value = kind === 'hiss' ? 3800 : 1400
+        g.gain.setValueAtTime(peak, t)
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+        src.connect(f)
+        f.connect(g)
+        g.connect(master)
+        src.start(t)
+        src.stop(t + dur + 0.01)
+      }
+
+      let phraseTone = 1 // each sentence starts on its own slight key
+      function speakWord(word, punct, caps) {
+        const pitch = cfg.voicePitch || 1
+        if (sentencePos === 0) phraseTone = 0.96 + hash(word + 'P') * 0.08
+        // per-word identity, plus natural declination across the sentence
+        const base =
+          300 *
+          pitch *
+          phraseTone *
+          (1 + (hash(word) - 0.5) * 0.1) *
+          Math.pow(0.985, Math.min(sentencePos, 10))
+        const sylls = word.match(/[^aeiouy]*[aeiouy]+[^aeiouy]{0,2}/g) || [word]
+        const q = punct.includes('?')
+        const ex = punct.includes('!') || caps
+        // stress usually leads, but some words carry it on the second syllable
+        const stressIdx = sylls.length > 1 && hash(word + 'S') > 0.7 ? 1 : 0
+        sylls.forEach((syl, i) => {
+          const stressed = i === stressIdx
+          const vowels = syl.match(/[aeiouy]/g) || ['a']
+          let f = base * (VOWEL_COLOR[vowels[0]] || 1) * (stressed ? 1.09 : 0.96)
+          if (q) f *= 1 + 0.2 * ((i + 1) / sylls.length) // rise into the '?'
+          if (ex) f *= 1.1
+          const jit = 1 + (hash(word + i) - 0.5) * 0.05
+          const dur = (stressed ? 0.076 : 0.055) * (sylls.length > 2 ? 0.88 : 1)
+          const onset = syl[0]
+          if ('ptkbdg'.includes(onset)) noiseHit(vt, 0.016, 'tick', 0.05)
+          else if ('sfzxhc'.includes(onset)) noiseHit(vt, 0.028, 'hiss', 0.022)
+          const isLast = i === sylls.length - 1
+          // sentence-final fall beats everything; diphthongs glide between
+          // their two vowel colours; otherwise the default gentle up-bend
+          let target
+          if (isLast && punct.includes('.')) target = f * jit * 0.78
+          else if (vowels.length > 1)
+            target = base * (VOWEL_COLOR[vowels[1]] || 1) * jit * (stressed ? 1.09 : 0.96)
+          tone(f * jit, vt, dur, (stressed ? 0.084 : 0.058) * (ex ? 1.25 : 1), target)
+          vt += dur * 0.82
+        })
+        vt += 0.038 + hash(word + 'G') * 0.035 // organic word gap
+        sentencePos++
+        if (/[.!?]/.test(punct)) {
+          sentencePos = 0
+          vt += /[!?]/.test(punct) ? 0.15 : 0.2
+        } else if (/[,;:]/.test(punct)) vt += 0.12
+      }
+
+      window.widget.onSpeak(({ text, done, hush }) => {
         if (cfg.voice === false) return
         try {
-          vctx ??= new AudioContext()
+          if (!vctx) voiceInit()
         } catch {
           return
         }
         const now = vctx.currentTime
+        if (hush) {
+          // the text finished rendering — fade the remaining babble fast
+          master.gain.cancelScheduledValues(now)
+          master.gain.setValueAtTime(master.gain.value, now)
+          master.gain.linearRampToValueAtTime(0.0001, now + 0.22)
+          master.gain.setValueAtTime(0.9, now + 0.4) // ready for the next turn
+          vt = now + 0.4
+          wordBuf = ''
+          sentencePos = 0
+          return
+        }
         if (vt < now + 0.03) vt = now + 0.03
-        const pitch = cfg.voicePitch || 1
-        for (const ch of String(text).toLowerCase()) {
-          if (vt > now + 5) return // stay roughly in step with the stream
-          if (/[a-z0-9]/.test(ch)) {
-            const vowel = 'aeiou'.includes(ch)
-            const seed = ((ch.charCodeAt(0) * 7919) % 97) / 97
-            const f = 340 * pitch * (vowel ? 1.55 + seed * 0.95 : 1.1 + seed * 0.6)
-            const dur = vowel ? 0.048 : 0.032
-            blipNote(f, vt, dur)
-            vt += dur * 0.8
-          } else if (ch === ' ') vt += 0.028
-          else if (',;:'.includes(ch)) vt += 0.09
-          else if (ch === '?') {
-            blipNote(560 * pitch, vt, 0.06)
-            blipNote(790 * pitch, vt + 0.055, 0.09)
-            vt += 0.19
-          } else if ('.!'.includes(ch)) vt += 0.15
+        // don't voice URLs or markdown scaffolding
+        const clean = (wordBuf + (text || '')).replace(/https?:\/\/\S+/g, ' link ')
+        wordBuf = ''
+        const parts = clean.split(/(\s+)/)
+        let end = parts.length
+        if (!done && end && !/\s/.test(parts[end - 1])) {
+          wordBuf = parts[end - 1] // an unfinished word — wait for the rest
+          end -= 1
+        }
+        for (let i = 0; i < end; i++) {
+          if (vt > now + 2.5) {
+            wordBuf = '' // never run far past the text; drop and skip ahead
+            return
+          }
+          const tok = parts[i]
+          if (!tok || /^\s+$/.test(tok)) continue
+          const caps = (tok.match(/[A-Z]/g) || []).length >= 2 // SHOUTED words
+          const m = tok.toLowerCase().replace(/[`*_#>[\]()~|=+-]/g, '')
+          const word = m.replace(/[^a-z0-9']/g, '')
+          const punct = m.replace(/[a-z0-9']/g, '')
+          if (word) speakWord(word, punct, caps)
+          else if (/[.!?]/.test(punct)) {
+            sentencePos = 0
+            vt += 0.15
+          }
         }
       })
+
+      // --- bot idle: nothing has happened TO homie — no chats, pokes, or
+      // notifications — for 5 minutes → he dozes off. Interaction wakes him.
+      let dozeTimer
+      let lastActivity = Date.now()
+      function activity() {
+        lastActivity = Date.now()
+        if (!sleeping) return
+        sleeping = false
+        clearTimeout(dozeTimer)
+        face.react('bounce')
+        face.setExpression(activeMood())
+      }
+      setInterval(() => {
+        if (sleeping || chatting) return
+        if (Date.now() - lastActivity > 5 * 60 * 1000) {
+          sleeping = true
+          face.setExpression('sleepy')
+          dozeTimer = setTimeout(() => sleeping && face.setExpression('sleep'), 25000)
+        }
+      }, 10000)
 
       // --- a bot reached out: peep bubble up and perk up ---
       const peep = document.querySelector('#peep')
@@ -408,6 +571,7 @@
       }
 
       window.widget.onNotify(() => {
+        activity()
         peep.hidden = false
         blip()
         if (!chatting) {
@@ -415,7 +579,7 @@
           face.setExpression('excited')
           face.react('pop')
           face.react('bounce')
-          chatTimer = setTimeout(() => face.setExpression(activeMood()), 4000)
+          chatTimer = setTimeout(() => face.setExpression(restMood()), 4000)
         }
         // a soft nudge now and then until it's read
         clearInterval(peepTimer)
@@ -438,7 +602,7 @@
         dropTimer = setTimeout(() => {
           dragging = false
           face.react('boing')
-          face.setExpression(activeMood())
+          face.setExpression(restMood())
         }, 250)
       })
 

@@ -446,8 +446,8 @@
 
       // --- window height follows content, up to main's cap; then we scroll ---
       // Resizing moves the whole window (it grows upward from an anchored
-      // bottom), so it must be calm: frozen while tokens stream in, throttled
-      // and thresholded otherwise.
+      // bottom), so it must be calm: while tokens stream it grows only, in
+      // big throttled steps; otherwise small threshold, quicker throttle.
       let streaming = false
       let lastH = 0
       let lastT = 0
@@ -457,9 +457,10 @@
       const contentH = () =>
         log.scrollHeight + bar.offsetHeight + row.offsetHeight + 18 + (bar.hidden ? 6 : 12)
       function report(force) {
-        if (streaming && !force) return
         const want = Math.min(600, contentH())
-        if (Math.abs(want - lastH) < 12) return
+        if (streaming && !force && want <= lastH) return // never shrink mid-stream
+        if (!force && Math.abs(want - lastH) < (streaming ? 24 : 12)) return
+        const gap = streaming && !force ? 420 : 150
         const fire = () => {
           lastH = Math.min(600, contentH())
           lastT = performance.now()
@@ -467,8 +468,8 @@
           stick()
         }
         const since = performance.now() - lastT
-        if (since > 150) fire()
-        else if (!pend) pend = setTimeout(() => ((pend = null), fire()), 160 - since)
+        if (force || since > gap) fire()
+        else if (!pend) pend = setTimeout(() => ((pend = null), fire()), gap - since + 10)
       }
 
       const MAX_KEPT = 80
@@ -489,6 +490,10 @@
 
       document.querySelector('#clearBtn').addEventListener('click', () => {
         clearTyping()
+        clearInterval(revealTimer)
+        revealTimer = null
+        streamQueue = ''
+        finalPending = null
         streamBubble = null
         streaming = false
         log.replaceChildren()
@@ -563,37 +568,82 @@
         window.widget.chatSend(text)
       })
 
-      // live tokens from the platform stream straight into one bubble; the
-      // window holds still and the log scrolls until the turn is over
+      // live tokens from the platform stream into one bubble — through a
+      // reveal queue, because the network clumps deltas into bursts. Reveal
+      // runs at reading pace, catches up smoothly when a burst backs up, and
+      // sprints once the final frame has landed.
       let streamBubble = null
+      let streamQueue = ''
+      let finalPending = null
+      let revealTimer = null
+
+      const ensureStreamBubble = () => (streamBubble ??= addBubble('bot tailed', ''))
+
+      function finishStream() {
+        const b = streamBubble
+        streamBubble = null
+        streaming = false
+        if (b && finalPending !== null) {
+          // the final `response` frame is the source of truth
+          b.innerHTML = renderMd(finalPending)
+          b.classList.add('rich')
+          attachOg(b)
+        }
+        finalPending = null
+        window.widget.voiceHush() // text is done — wind the babble down with it
+        report(true)
+        stick(true)
+        input.focus()
+      }
+
+      function startReveal() {
+        if (revealTimer) return
+        revealTimer = setInterval(() => {
+          if (!streamQueue.length) {
+            clearInterval(revealTimer)
+            revealTimer = null
+            if (finalPending !== null) finishStream()
+            return
+          }
+          // chars/sec: reading pace normally, gentle catch-up on bursts
+          const cps =
+            finalPending !== null ? 1200 : Math.min(900, Math.max(60, streamQueue.length * 0.8))
+          const n = Math.max(1, Math.round(cps * 0.03))
+          ensureStreamBubble().textContent += streamQueue.slice(0, n)
+          streamQueue = streamQueue.slice(n)
+          report() // grow the window along with the text (throttled inside)
+          stick()
+        }, 30)
+      }
+
       window.widget.onChatDelta(({ text }) => {
         streaming = true
         clearTyping()
-        if (!streamBubble) streamBubble = addBubble('bot tailed', '')
-        streamBubble.textContent += text
-        stick()
+        ensureStreamBubble()
+        streamQueue += text
+        startReveal()
       })
 
       window.widget.onChatReply(({ text }) => {
-        streaming = false
         clearTyping()
-        if (streamBubble) {
-          // the final `response` frame is the source of truth
-          streamBubble.innerHTML = renderMd(text)
-          streamBubble.classList.add('rich')
-          attachOg(streamBubble)
-          streamBubble = null
-          report(true)
-          stick(true)
+        if (streamBubble || streamQueue.length) {
+          finalPending = text
+          if (!revealTimer && !streamQueue.length) finishStream()
+          else startReveal()
         } else {
+          streaming = false
           typewrite(addBubble('bot tailed', ''), text)
+          input.focus()
         }
-        input.focus()
       })
 
       window.widget.onChatError(({ text }) => {
         streaming = false
         clearTyping()
+        clearInterval(revealTimer)
+        revealTimer = null
+        streamQueue = ''
+        finalPending = null
         streamBubble = null // keep whatever partially streamed; the error explains the cut
         addBubble('err', text)
         report(true)
@@ -606,6 +656,10 @@
       window.widget.onChatHistory(({ messages }) => {
         streaming = false
         streamBubble = null
+        clearInterval(revealTimer)
+        revealTimer = null
+        streamQueue = ''
+        finalPending = null
         clearTyping()
         log.replaceChildren()
         for (const msg of messages) {

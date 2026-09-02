@@ -123,9 +123,25 @@ function positionChat() {
   chat.setBounds(chatBounds())
 }
 
+function hideChat() {
+  chat.hide()
+  if (win && !win.isDestroyed()) win.webContents.send('chat-state', { state: 'end' })
+}
+
+function showChat() {
+  positionChat()
+  chat.show()
+  chat.webContents.send('chat-focus')
+  if (win && !win.isDestroyed()) win.webContents.send('chat-state', { state: 'open' })
+  openThread() // a pending notification opens straight into its thread
+}
+
 function toggleChat() {
+  // hide/show, never destroy — the transcript lives in the window and only
+  // the clear button empties it
   if (chat && !chat.isDestroyed()) {
-    chat.close()
+    if (chat.isVisible()) hideChat()
+    else showChat()
     return
   }
   chatH = 60 // a fresh chat starts compact; the page reports real size
@@ -264,7 +280,7 @@ bridge.on('notify', (n) => {
   lastNotif = n
   toWin('notify', { from: n.from || 'a bot', kind: n.kind })
   // if the user is already looking at the chat, pull the thread in live
-  if (chat && !chat.isDestroyed()) openThread()
+  if (chat && !chat.isDestroyed() && chat.isVisible()) openThread()
 })
 
 ipcMain.handle('get-cfg', () => cfg)
@@ -309,7 +325,9 @@ ipcMain.on('toggle-chat', toggleChat)
 ipcMain.on('bridge-connect', () => bridge.connect(cfg.server, cfg.token))
 ipcMain.on('bridge-disconnect', () => bridge.disconnect())
 ipcMain.handle('get-bridge-status', () => bridge.status)
-ipcMain.on('close-chat', () => chat?.close())
+ipcMain.on('close-chat', () => {
+  if (chat && !chat.isDestroyed() && chat.isVisible()) hideChat()
+})
 ipcMain.on('chat-size', (_e, h) => {
   const next = Math.max(60, Math.min(600, Math.round(h)))
   if (Math.abs(next - chatH) < 8) return
@@ -349,6 +367,7 @@ ipcMain.on('chat-send', async (_e, text) => {
       if (ev.type === 'tool') toWin('chat-state', { state: 'tool' })
     })
     if (!streaming) toWin('speak', { text: final }) // reply arrived un-streamed
+    toWin('speak', { done: true }) // flush any buffered partial word
     toChat('chat-reply', { text: final }) // `response` is the source of truth
     toWin('chat-state', { state: 'reply', ...brain.inferMood(final) })
   } catch (err) {
@@ -364,6 +383,14 @@ ipcMain.on('chat-send', async (_e, text) => {
 })
 ipcMain.on('refresh-bots', () => bridge.refreshBots())
 ipcMain.on('reset-thread', () => bridge.resetThread())
+ipcMain.on('voice-hush', () => toWin('speak', { hush: true }))
+
+// --- start with the system: a login item pointing electron at this folder ---
+const loginItem = { path: process.execPath, args: [__dirname] }
+ipcMain.handle('get-autostart', () => app.getLoginItemSettings(loginItem).openAtLogin)
+ipcMain.on('set-autostart', (_e, on) => {
+  app.setLoginItemSettings({ openAtLogin: !!on, ...loginItem })
+})
 
 // --- OG link previews: fetched here, cached per session ---
 const ogCache = new Map()
