@@ -1,37 +1,148 @@
-const { app, BrowserWindow, screen, ipcMain } = require('electron')
+const { app, BrowserWindow, Menu, screen, ipcMain } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const brain = require('./brain')
 const bridge = require('./bridge')
 
 const SIZE = 180
+const CHAT_W = 320
 const ICON = path.join(__dirname, '..', 'docs', 'logo.png')
-const DEFAULTS = {
+
+// styling belongs to the incubator, so a cloned bot keeps its outfit
+const STYLE_KEYS = ['skin', 'ink', 'pupils', 'mood', 'voice', 'voicePitch']
+const STYLE_DEFAULTS = {
   skin: '#16181a',
   ink: '#e9ebec',
   pupils: false,
   mood: 'auto',
   voice: true,
   voicePitch: 1,
+}
+const GLOBAL_DEFAULTS = {
   server: 'wss://bwnd.app/api/v1/incubators/public/bbots/ws',
   token: '', // the bbk_… device key
-  incubator: '', // which of the user's incubators this bbot stands in for
+  incubator: '', // the primary bbot's incubator
   autoConnect: false,
+  clones: [], // incubator ids of extra bbots to respawn at launch
+  bots: {}, // per-incubator style overrides
 }
 
 const cfgPath = () => path.join(app.getPath('userData'), 'widget-config.json')
-let cfg = { ...DEFAULTS }
+let cfg = { ...GLOBAL_DEFAULTS }
 try {
-  cfg = { ...DEFAULTS, ...JSON.parse(fs.readFileSync(cfgPath(), 'utf8')) }
+  cfg = { ...GLOBAL_DEFAULTS, ...JSON.parse(fs.readFileSync(cfgPath(), 'utf8')) }
 } catch {}
+// migrate a pre-clone config: top-level style keys move into bots._default
+{
+  const legacy = {}
+  for (const k of STYLE_KEYS) {
+    if (k in cfg) {
+      legacy[k] = cfg[k]
+      delete cfg[k]
+    }
+  }
+  if (Object.keys(legacy).length) {
+    cfg.bots = { ...cfg.bots, _default: { ...legacy, ...(cfg.bots?._default || {}) } }
+  }
+}
+const save = () => {
+  try {
+    fs.writeFileSync(cfgPath(), JSON.stringify(cfg))
+  } catch {}
+}
 
-let win = null
-let settings = null
+// a first-time clone rolls its own identity: fresh fit, fresh voice
+const RANDOM_FITS = [
+  { skin: '#16181a', ink: '#e9ebec' }, // midnight
+  { skin: '#f4f5f6', ink: '#101214' }, // ghost
+  { skin: '#0a0f0b', ink: '#b6ff3d' }, // terminal
+  { skin: '#ff9ecb', ink: '#5f1d3a' }, // bubblegum
+  { skin: '#4ecdc4', ink: '#0b3437' }, // ocean
+  { skin: '#ffd166', ink: '#4a3405' }, // honey
+  { skin: '#a78bfa', ink: '#241a4d' }, // grape
+  { skin: '#ff6b6b', ink: '#4d0f0f' }, // cherry
+  { skin: '#1f6feb', ink: '#dbe9ff' }, // cobalt
+  { skin: '#2d3436', ink: '#ffb8b8' }, // charcoal rose
+]
+function randomStyle() {
+  const worn = new Set(Object.values(cfg.bots).map((b) => b.skin))
+  const pool = RANDOM_FITS.filter((f) => !worn.has(f.skin))
+  const fits = pool.length ? pool : RANDOM_FITS
+  const fit = fits[Math.floor(Math.random() * fits.length)]
+  return {
+    ...fit,
+    pupils: Math.random() < 0.35,
+    mood: 'auto',
+    voice: true,
+    voicePitch: Math.round((0.7 + Math.random() * 0.9) * 20) / 20,
+  }
+}
 
-function createWindow() {
-  win = new BrowserWindow({
+const styleFor = (incubator) => ({
+  ...STYLE_DEFAULTS,
+  ...(cfg.bots._default || {}),
+  ...(incubator ? cfg.bots[incubator] || {} : {}),
+})
+
+// --- instances: the primary bbot plus any clones ---
+const instances = new Map()
+let seq = 0
+const primary = () => [...instances.values()].find((i) => i.primary)
+const persistClones = () => {
+  cfg.clones = [...instances.values()].filter((i) => !i.primary).map((i) => i.incubator)
+  save()
+}
+const mergedCfg = (inst) => ({
+  ...styleFor(inst.incubator),
+  server: cfg.server,
+  token: cfg.token,
+  autoConnect: cfg.autoConnect,
+  incubator: inst.incubator,
+})
+
+function botOf(e) {
+  for (const inst of instances.values()) {
+    for (const w of [inst.win, inst.chat, inst.settings]) {
+      if (w && !w.isDestroyed() && w.webContents === e.sender) return inst
+    }
+  }
+  return primary()
+}
+
+const toWin = (inst, ch, p) =>
+  inst?.win && !inst.win.isDestroyed() && inst.win.webContents.send(ch, p)
+const toChat = (inst, ch, p) =>
+  inst?.chat && !inst.chat.isDestroyed() && inst.chat.webContents.send(ch, p)
+
+function broadcastCfg() {
+  for (const inst of instances.values()) {
+    const c = mergedCfg(inst)
+    for (const w of [inst.win, inst.chat, inst.settings]) {
+      if (w && !w.isDestroyed()) w.webContents.send('cfg', c)
+    }
+  }
+}
+
+function spawnBot(incubator, { primary: isPrimary = false, x, y } = {}) {
+  const inst = {
+    key: isPrimary ? 'main' : `c${++seq}`,
+    primary: isPrimary,
+    incubator: incubator || '',
+    win: null,
+    chat: null,
+    settings: null,
+    chatH: 60,
+    resizing: false,
+    moving: null,
+    adjusting: false,
+    adjustTimer: null,
+    lastNotif: null,
+    conversationId: null,
+  }
+  inst.win = new BrowserWindow({
     width: SIZE,
     height: SIZE,
+    ...(x != null ? { x: Math.round(x), y: Math.round(y) } : {}),
     icon: ICON,
     transparent: true,
     frame: false,
@@ -46,58 +157,68 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
     },
   })
+  inst.win.setAlwaysOnTop(true, 'screen-saver')
+  inst.win.setAspectRatio(1)
+  inst.win.loadFile('index.html')
+  inst.win.on('move', () => {
+    if (!inst.win.isDestroyed() && !inst.resizing && !inst.adjusting)
+      inst.win.webContents.send('dragging')
+    positionChat(inst)
+  })
+  inst.win.on('closed', () => closeBot(inst))
+  instances.set(inst.key, inst)
+  return inst
+}
 
-  win.setAlwaysOnTop(true, 'screen-saver')
-  win.setAspectRatio(1)
-  win.loadFile('index.html')
+function closeBot(inst) {
+  if (!instances.has(inst.key)) return
+  instances.delete(inst.key)
+  for (const w of [inst.chat, inst.settings]) {
+    if (w && !w.isDestroyed()) w.destroy()
+  }
+  if (inst.win && !inst.win.isDestroyed()) inst.win.destroy()
+  if (!inst.primary) persistClones()
+}
 
-  // The renderer can't see the pointer once it leaves the window, so global
-  // gaze has to come from here.
-  const poll = setInterval(() => {
-    if (win.isDestroyed()) return clearInterval(poll)
-    const p = screen.getCursorScreenPoint()
-    const b = win.getBounds()
+// The renderers can't see the pointer once it leaves their windows, so global
+// gaze (and manual drag/resize) is driven from one shared poll.
+setInterval(() => {
+  const p = screen.getCursorScreenPoint()
+  for (const inst of instances.values()) {
+    const w = inst.win
+    if (!w || w.isDestroyed()) continue
+    const b = w.getBounds()
     const cx = b.x + b.width / 2
     const cy = b.y + b.height / 2
-    if (resizing) {
-      // Size the square so its corner tracks the cursor, keeping the centre put.
+    if (inst.resizing) {
+      // square sized so its corner tracks the cursor, centre kept put
       const size = Math.max(
         80,
         Math.min(800, Math.round(2 * Math.max(Math.abs(p.x - cx), Math.abs(p.y - cy))))
       )
-      win.setBounds({
+      w.setBounds({
         x: Math.round(cx - size / 2),
         y: Math.round(cy - size / 2),
         width: size,
         height: size,
       })
-    } else if (moving) {
-      // manual drag: the face is clickable, so the OS drag region is gone.
-      // Full bounds with the size captured at drag start — setPosition alone
-      // lets DPI rounding drift the size a pixel per tick.
-      win.setBounds({
-        x: Math.round(p.x - moving.dx),
-        y: Math.round(p.y - moving.dy),
-        width: moving.w,
-        height: moving.h,
+    } else if (inst.moving) {
+      // full bounds with the size captured at drag start — setPosition alone
+      // lets DPI rounding drift the size a pixel per tick
+      w.setBounds({
+        x: Math.round(p.x - inst.moving.dx),
+        y: Math.round(p.y - inst.moving.dy),
+        width: inst.moving.w,
+        height: inst.moving.h,
       })
     }
-    win.webContents.send('cursor', { x: p.x - cx, y: p.y - cy })
-  }, 33)
+    w.webContents.send('cursor', { x: p.x - cx, y: p.y - cy })
+  }
+}, 33)
 
-  win.on('move', () => {
-    if (!win.isDestroyed() && !resizing && !adjusting) win.webContents.send('dragging')
-    positionChat()
-  })
-}
-
-// --- chat: a transparent bubble window anchored above the face ---
-const CHAT_W = 320
-let chat = null
-let chatH = 60
-
-function chatBounds() {
-  const b = win.getBounds()
+// --- chat: a transparent bubble window anchored above each face ---
+function chatBounds(inst) {
+  const b = inst.win.getBounds()
   const area = screen.getDisplayMatching(b).workArea
   const gap = 6
   let x = Math.round(b.x + b.width / 2 - CHAT_W / 2)
@@ -109,44 +230,44 @@ function chatBounds() {
   let h
   let y
   if (above >= 160 || above >= below) {
-    h = Math.max(60, Math.min(chatH, above))
+    h = Math.max(60, Math.min(inst.chatH, above))
     y = b.y - h - gap
   } else {
-    h = Math.max(60, Math.min(chatH, below))
+    h = Math.max(60, Math.min(inst.chatH, below))
     y = b.y + b.height + gap
   }
   return { x, y: Math.round(y), width: CHAT_W, height: Math.round(h) }
 }
 
-function positionChat() {
-  if (!chat || chat.isDestroyed() || !win || win.isDestroyed()) return
-  chat.setBounds(chatBounds())
+function positionChat(inst) {
+  if (!inst.chat || inst.chat.isDestroyed() || !inst.win || inst.win.isDestroyed()) return
+  inst.chat.setBounds(chatBounds(inst))
 }
 
-function hideChat() {
-  chat.hide()
-  if (win && !win.isDestroyed()) win.webContents.send('chat-state', { state: 'end' })
+function hideChat(inst) {
+  inst.chat.hide()
+  toWin(inst, 'chat-state', { state: 'end' })
 }
 
-function showChat() {
-  positionChat()
-  chat.show()
-  chat.webContents.send('chat-focus')
-  if (win && !win.isDestroyed()) win.webContents.send('chat-state', { state: 'open' })
-  openThread() // a pending notification opens straight into its thread
+function showChat(inst) {
+  positionChat(inst)
+  inst.chat.show()
+  inst.chat.webContents.send('chat-focus')
+  toWin(inst, 'chat-state', { state: 'open' })
+  openThread(inst) // a pending notification opens straight into its thread
 }
 
-function toggleChat() {
+function toggleChat(inst) {
   // hide/show, never destroy — the transcript lives in the window and only
   // the clear button empties it
-  if (chat && !chat.isDestroyed()) {
-    if (chat.isVisible()) hideChat()
-    else showChat()
+  if (inst.chat && !inst.chat.isDestroyed()) {
+    if (inst.chat.isVisible()) hideChat(inst)
+    else showChat(inst)
     return
   }
-  chatH = 60 // a fresh chat starts compact; the page reports real size
-  const at = chatBounds() // born in place — no centered flash, no jump
-  chat = new BrowserWindow({
+  inst.chatH = 60 // a fresh chat starts compact; the page reports real size
+  const at = chatBounds(inst) // born in place — no centered flash, no jump
+  inst.chat = new BrowserWindow({
     ...at,
     icon: ICON,
     show: false,
@@ -162,42 +283,42 @@ function toggleChat() {
       preload: path.join(__dirname, 'preload.js'),
     },
   })
-  chat.setAlwaysOnTop(true, 'screen-saver')
-  chat.loadFile('chat.html')
+  inst.chat.setAlwaysOnTop(true, 'screen-saver')
+  inst.chat.loadFile('chat.html')
   // links in replies open in the real browser, never in-widget
-  chat.webContents.setWindowOpenHandler(({ url }) => {
+  inst.chat.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) require('electron').shell.openExternal(url)
     return { action: 'deny' }
   })
-  chat.webContents.on('will-navigate', (e) => e.preventDefault())
-  chat.once('ready-to-show', () => {
-    positionChat()
-    chat.show()
-    chat.webContents.send('chat-focus')
-    openThread() // a pending notification opens straight into its thread
+  inst.chat.webContents.on('will-navigate', (e) => e.preventDefault())
+  inst.chat.once('ready-to-show', () => {
+    positionChat(inst)
+    inst.chat.show()
+    inst.chat.webContents.send('chat-focus')
+    openThread(inst)
   })
-  chat.on('closed', () => {
-    chat = null
-    if (win && !win.isDestroyed()) win.webContents.send('chat-state', { state: 'end' })
+  inst.chat.on('closed', () => {
+    inst.chat = null
+    toWin(inst, 'chat-state', { state: 'end' })
   })
-  if (win && !win.isDestroyed()) win.webContents.send('chat-state', { state: 'open' })
+  toWin(inst, 'chat-state', { state: 'open' })
 }
 
-function toggleSettings() {
-  if (settings && !settings.isDestroyed()) {
-    settings.close()
+function toggleSettings(inst) {
+  if (inst.settings && !inst.settings.isDestroyed()) {
+    inst.settings.close()
     return
   }
   const W = 430
   const H = 620
-  const b = win.getBounds()
+  const b = inst.win.getBounds()
   const area = screen.getDisplayMatching(b).workArea
   let x = b.x + b.width + 14
   if (x + W > area.x + area.width) x = b.x - W - 14
   x = Math.max(area.x, Math.min(x, area.x + area.width - W))
   const y = Math.max(area.y, Math.min(b.y, area.y + area.height - H))
 
-  settings = new BrowserWindow({
+  inst.settings = new BrowserWindow({
     width: W,
     height: H,
     x,
@@ -214,162 +335,209 @@ function toggleSettings() {
       preload: path.join(__dirname, 'preload.js'),
     },
   })
-  settings.loadFile('settings.html')
-  settings.webContents.setWindowOpenHandler(({ url }) => {
+  inst.settings.loadFile('settings.html')
+  inst.settings.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) require('electron').shell.openExternal(url)
     return { action: 'deny' }
   })
-  settings.webContents.on('will-navigate', (e) => e.preventDefault())
-  settings.on('closed', () => (settings = null))
+  inst.settings.webContents.on('will-navigate', (e) => e.preventDefault())
+  inst.settings.on('closed', () => (inst.settings = null))
 }
 
-let resizing = false
-let moving = null // {dx, dy}: cursor offset into the window while face-dragging
-let adjusting = false
-let adjustTimer
-
-const broadcast = () => {
-  for (const w of BrowserWindow.getAllWindows()) {
-    if (!w.isDestroyed()) w.webContents.send('cfg', cfg)
+// --- the right-click menu: clone a bbot per incubator, dismiss clones ---
+function faceMenu(inst) {
+  const nameOf = (id) => bridge.incubators.find((i) => i.id === id)?.name || id || 'unbound'
+  const cloneItems = bridge.incubators.length
+    ? bridge.incubators.map((i) => ({
+        label: i.name + (i.container_running ? '' : ' (asleep)'),
+        click: () => {
+          // an incubator with no saved style rolls a random identity once
+          if (!cfg.bots[i.id]) {
+            cfg.bots[i.id] = randomStyle()
+            save()
+          }
+          const b = inst.win.getBounds()
+          spawnBot(i.id, { x: b.x + b.width + 16, y: b.y })
+          persistClones()
+        },
+      }))
+    : [{ label: 'connect to bwnd first', enabled: false }]
+  const template = [
+    { label: nameOf(inst.incubator), enabled: false },
+    { type: 'separator' },
+    { label: 'Chat', click: () => toggleChat(inst) },
+    { label: 'Customize', click: () => toggleSettings(inst) },
+    { label: 'Clone as', submenu: cloneItems },
+  ]
+  if (!inst.primary) {
+    template.push({ type: 'separator' })
+    template.push({ label: 'Dismiss this bbot', click: () => closeBot(inst) })
   }
+  Menu.buildFromTemplate(template).popup({ window: inst.win })
 }
 
+// --- bridge plumbing ---
 bridge.on('status', (s) => {
   for (const w of BrowserWindow.getAllWindows()) {
     if (!w.isDestroyed()) w.webContents.send('bridge-status', s)
   }
 })
+
 bridge.on('hello', ({ user, incubators }) => {
-  // keep the chosen incubator valid; default to the first one
-  if (incubators.length && !incubators.some((i) => i.id === cfg.incubator)) {
-    cfg = { ...cfg, incubator: incubators[0].id }
-    try {
-      fs.writeFileSync(cfgPath(), JSON.stringify(cfg))
-    } catch {}
-    broadcast()
+  // keep the primary's incubator valid; default to the first one
+  const main = primary()
+  if (incubators.length && main && !incubators.some((i) => i.id === main.incubator)) {
+    main.incubator = incubators[0].id
+    cfg.incubator = main.incubator
+    save()
+    broadcastCfg()
   }
   for (const w of BrowserWindow.getAllWindows()) {
     if (!w.isDestroyed()) w.webContents.send('hello', { user, incubators })
   }
 })
 
-// --- notifications: events are pointers; the conversation is the store ---
-let lastNotif = null // most recent {kind, incubator_id, conversation_id, from}
-
-async function openThread() {
-  if (!lastNotif || bridge.status !== 'on') return
-  const notif = lastNotif
+// --- notifications: routed to the bbot bound to that incubator ---
+async function openThread(inst) {
+  if (!inst.lastNotif || bridge.status !== 'on') return
+  const notif = inst.lastNotif
   try {
     const h = await bridge.history(notif.conversation_id)
-    lastNotif = null
-    if (notif.incubator_id && notif.incubator_id !== cfg.incubator) {
-      cfg = { ...cfg, incubator: notif.incubator_id }
-      try {
-        fs.writeFileSync(cfgPath(), JSON.stringify(cfg))
-      } catch {}
-      broadcast()
+    inst.lastNotif = null
+    if (notif.incubator_id && notif.incubator_id !== inst.incubator) {
+      inst.incubator = notif.incubator_id
+      if (inst.primary) cfg.incubator = inst.incubator
+      persistClones()
+      broadcastCfg()
     }
-    toChat('chat-history', { title: h.title, messages: h.messages || [] })
-    toWin('notify-clear')
+    inst.conversationId = h.conversation_id
+    toChat(inst, 'chat-history', { title: h.title, messages: h.messages || [] })
+    toWin(inst, 'notify-clear')
   } catch (err) {
-    toChat('chat-error', { text: `couldn't load the thread: ${err?.message || 'unknown'}` })
+    toChat(inst, 'chat-error', { text: `couldn't load the thread: ${err?.message || 'unknown'}` })
   }
 }
 
 bridge.on('notify', (n) => {
-  lastNotif = n
-  toWin('notify', { from: n.from || 'a bot', kind: n.kind })
-  // if the user is already looking at the chat, pull the thread in live
-  if (chat && !chat.isDestroyed() && chat.isVisible()) openThread()
+  const inst =
+    [...instances.values()].find((i) => i.incubator === n.incubator_id) || primary()
+  if (!inst) return
+  inst.lastNotif = n
+  toWin(inst, 'notify', { from: n.from || 'a bot', kind: n.kind })
+  if (inst.chat && !inst.chat.isDestroyed() && inst.chat.isVisible()) openThread(inst)
 })
 
-ipcMain.handle('get-cfg', () => cfg)
-ipcMain.handle('get-size', () => (win && !win.isDestroyed() ? win.getBounds().width : SIZE))
-ipcMain.on('set-cfg', (_e, patch) => {
-  // switching bots switches threads
-  if (patch.incubator && patch.incubator !== cfg.incubator) bridge.resetThread()
-  cfg = { ...cfg, ...patch }
-  try {
-    fs.writeFileSync(cfgPath(), JSON.stringify(cfg))
-  } catch {}
-  broadcast()
+// --- IPC (everything resolves the calling window's bbot) ---
+ipcMain.handle('get-cfg', (e) => mergedCfg(botOf(e)))
+ipcMain.handle('get-size', (e) => {
+  const inst = botOf(e)
+  return inst?.win && !inst.win.isDestroyed() ? inst.win.getBounds().width : SIZE
 })
-ipcMain.on('react', (_e, name) => {
-  if (win && !win.isDestroyed()) win.webContents.send('react', name)
+ipcMain.on('set-cfg', (e, patch) => {
+  const inst = botOf(e)
+  if (!inst) return
+  if ('incubator' in patch && patch.incubator !== inst.incubator) {
+    inst.incubator = patch.incubator // rebinding switches threads
+    inst.conversationId = null
+    if (inst.primary) cfg.incubator = inst.incubator
+    persistClones()
+  }
+  const styleTarget = inst.incubator || '_default'
+  for (const k of STYLE_KEYS) {
+    if (k in patch) cfg.bots[styleTarget] = { ...cfg.bots[styleTarget], [k]: patch[k] }
+  }
+  for (const k of ['server', 'token', 'autoConnect']) {
+    if (k in patch) cfg[k] = patch[k]
+  }
+  save()
+  broadcastCfg()
 })
-ipcMain.on('set-size', (_e, size) => {
-  if (!win || win.isDestroyed()) return
+ipcMain.on('react', (e, name) => toWin(botOf(e), 'react', name))
+ipcMain.on('set-size', (e, size) => {
+  const inst = botOf(e)
+  if (!inst?.win || inst.win.isDestroyed()) return
   const s = Math.max(80, Math.min(800, Math.round(size)))
-  const b = win.getBounds()
-  adjusting = true
-  clearTimeout(adjustTimer)
-  adjustTimer = setTimeout(() => (adjusting = false), 300)
-  win.setBounds({
+  const b = inst.win.getBounds()
+  inst.adjusting = true
+  clearTimeout(inst.adjustTimer)
+  inst.adjustTimer = setTimeout(() => (inst.adjusting = false), 300)
+  inst.win.setBounds({
     x: Math.round(b.x + b.width / 2 - s / 2),
     y: Math.round(b.y + b.height / 2 - s / 2),
     width: s,
     height: s,
   })
 })
-ipcMain.on('resize-start', () => (resizing = true))
-ipcMain.on('resize-end', () => (resizing = false))
-ipcMain.on('move-start', () => {
-  if (!win || win.isDestroyed()) return
+ipcMain.on('resize-start', (e) => (botOf(e).resizing = true))
+ipcMain.on('resize-end', (e) => (botOf(e).resizing = false))
+ipcMain.on('move-start', (e) => {
+  const inst = botOf(e)
+  if (!inst?.win || inst.win.isDestroyed()) return
   const p = screen.getCursorScreenPoint()
-  const b = win.getBounds()
-  moving = { dx: p.x - b.x, dy: p.y - b.y, w: b.width, h: b.height }
+  const b = inst.win.getBounds()
+  inst.moving = { dx: p.x - b.x, dy: p.y - b.y, w: b.width, h: b.height }
 })
-ipcMain.on('move-end', () => (moving = null))
-ipcMain.on('toggle-settings', toggleSettings)
-ipcMain.on('toggle-chat', toggleChat)
+ipcMain.on('move-end', (e) => (botOf(e).moving = null))
+ipcMain.on('toggle-settings', (e) => toggleSettings(botOf(e)))
+ipcMain.on('toggle-chat', (e) => toggleChat(botOf(e)))
+ipcMain.on('face-menu', (e) => faceMenu(botOf(e)))
 ipcMain.on('bridge-connect', () => bridge.connect(cfg.server, cfg.token))
 ipcMain.on('bridge-disconnect', () => bridge.disconnect())
 ipcMain.handle('get-bridge-status', () => bridge.status)
-ipcMain.on('close-chat', () => {
-  if (chat && !chat.isDestroyed() && chat.isVisible()) hideChat()
+ipcMain.on('close-chat', (e) => {
+  const inst = botOf(e)
+  if (inst?.chat && !inst.chat.isDestroyed() && inst.chat.isVisible()) hideChat(inst)
 })
-ipcMain.on('chat-size', (_e, h) => {
+ipcMain.on('chat-size', (e, h) => {
+  const inst = botOf(e)
+  if (!inst) return
   const next = Math.max(60, Math.min(600, Math.round(h)))
-  if (Math.abs(next - chatH) < 8) return
-  chatH = next
-  positionChat()
+  if (Math.abs(next - inst.chatH) < 8) return
+  inst.chatH = next
+  positionChat(inst)
 })
-const toChat = (ch, p) => chat && !chat.isDestroyed() && chat.webContents.send(ch, p)
-const toWin = (ch, p) => win && !win.isDestroyed() && win.webContents.send(ch, p)
 
-ipcMain.on('chat-send', async (_e, text) => {
+ipcMain.on('chat-send', async (e, text) => {
+  const inst = botOf(e)
+  if (!inst) return
   const msg = String(text).slice(0, 2000)
 
   // no fake answers: chat only works over the bridge
-  if (bridge.status !== 'on' || !cfg.incubator) {
-    toChat('chat-error', {
+  if (bridge.status !== 'on' || !inst.incubator) {
+    toChat(inst, 'chat-error', {
       text:
         bridge.status === 'denied'
           ? 'key rejected — mint a new one in Tension and update it in settings'
           : 'not connected — open settings and connect to bwnd',
     })
-    toWin('chat-state', { state: 'error' })
+    toWin(inst, 'chat-state', { state: 'error' })
     return
   }
 
-  toWin('chat-state', { state: 'thinking' })
+  toWin(inst, 'chat-state', { state: 'thinking' })
   try {
     let streaming = false
-    const final = await bridge.chat(cfg.incubator, msg, (ev) => {
-      if (ev.type === 'delta') {
-        if (!streaming) {
-          streaming = true
-          toWin('chat-state', { state: 'streaming' })
+    const r = await bridge.chat(
+      inst.incubator,
+      msg,
+      (ev) => {
+        if (ev.type === 'delta') {
+          if (!streaming) {
+            streaming = true
+            toWin(inst, 'chat-state', { state: 'streaming' })
+          }
+          toChat(inst, 'chat-delta', { text: ev.content })
+          toWin(inst, 'speak', { text: ev.content }) // the voice rides the stream
         }
-        toChat('chat-delta', { text: ev.content })
-        toWin('speak', { text: ev.content }) // the voice rides the stream
-      }
-      if (ev.type === 'tool') toWin('chat-state', { state: 'tool' })
-    })
-    if (!streaming) toWin('speak', { text: final }) // reply arrived un-streamed
-    toWin('speak', { done: true }) // flush any buffered partial word
-    toChat('chat-reply', { text: final }) // `response` is the source of truth
-    toWin('chat-state', { state: 'reply', ...brain.inferMood(final) })
+        if (ev.type === 'tool') toWin(inst, 'chat-state', { state: 'tool' })
+      },
+      inst.conversationId
+    )
+    inst.conversationId = r.conversationId || inst.conversationId
+    if (!streaming) toWin(inst, 'speak', { text: r.text }) // arrived un-streamed
+    toWin(inst, 'speak', { done: true }) // flush any buffered partial word
+    toChat(inst, 'chat-reply', { text: r.text }) // `response` is the source of truth
+    toWin(inst, 'chat-state', { state: 'reply', ...brain.inferMood(r.text) })
   } catch (err) {
     const why =
       err?.message === 'timeout'
@@ -377,13 +545,16 @@ ipcMain.on('chat-send', async (_e, text) => {
         : err?.message === 'disconnected' || err?.message === 'offline'
           ? 'connection lost mid-reply'
           : err?.message || 'something broke'
-    toChat('chat-error', { text: why })
-    toWin('chat-state', { state: 'error' })
+    toChat(inst, 'chat-error', { text: why })
+    toWin(inst, 'chat-state', { state: 'error' })
   }
 })
 ipcMain.on('refresh-bots', () => bridge.refreshBots())
-ipcMain.on('reset-thread', () => bridge.resetThread())
-ipcMain.on('voice-hush', () => toWin('speak', { hush: true }))
+ipcMain.on('reset-thread', (e) => {
+  const inst = botOf(e)
+  if (inst) inst.conversationId = null
+})
+ipcMain.on('voice-hush', (e) => toWin(botOf(e), 'speak', { hush: true }))
 
 // --- start with the system: a login item pointing electron at this folder ---
 const loginItem = { path: process.execPath, args: [__dirname] }
@@ -438,16 +609,28 @@ ipcMain.handle('get-hello', () => ({
   user: bridge.user,
   incubators: bridge.incubators,
 }))
-ipcMain.on('quit', () => app.quit())
+ipcMain.on('quit', (e) => {
+  const inst = botOf(e)
+  if (!inst || inst.primary) app.quit()
+  else closeBot(inst) // a clone's close only dismisses that clone
+})
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
   app.on('second-instance', () => {
-    if (win && !win.isDestroyed()) win.focus()
+    const main = primary()
+    if (main?.win && !main.win.isDestroyed()) main.win.focus()
   })
   app.whenReady().then(() => {
-    createWindow()
+    const main = spawnBot(cfg.incubator, { primary: true })
+    // respawn saved clones fanned out beside the primary
+    let offset = 0
+    for (const id of cfg.clones || []) {
+      const b = main.win.getBounds()
+      offset += SIZE + 16
+      spawnBot(id, { x: b.x + offset, y: b.y })
+    }
     if (cfg.autoConnect && cfg.server) bridge.connect(cfg.server, cfg.token)
   })
   app.on('window-all-closed', () => app.quit())

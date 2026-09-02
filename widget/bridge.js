@@ -27,7 +27,6 @@ class Bridge extends EventEmitter {
     this.pinger = null
     this.user = null
     this.incubators = []
-    this.conversationId = null
     this.turn = null // the in-flight chat turn
     this.queue = []
     this.pendingHistory = [] // outstanding history requests
@@ -109,7 +108,7 @@ class Bridge extends EventEmitter {
       case 'pong':
         break
       case 'conversation':
-        this.conversationId = m.conversationId || this.conversationId
+        if (this.turn) this.turn.convId = m.conversationId || this.turn.convId
         break
       case 'text_delta':
         this.turn?.onEvent?.({ type: 'delta', content: m.content ?? '' })
@@ -136,8 +135,7 @@ class Bridge extends EventEmitter {
         if (i !== -1) {
           const req = this.pendingHistory.splice(i, 1)[0]
           clearTimeout(req.timeout)
-          this.conversationId = m.conversation_id // replies continue this thread
-          req.resolve(m)
+          req.resolve(m) // the caller owns the thread pointer
         }
         break
       }
@@ -146,7 +144,7 @@ class Bridge extends EventEmitter {
         this.turn = null
         if (t) {
           clearTimeout(t.timeout)
-          t.resolve(t.final ?? t.streamed)
+          t.resolve({ text: t.final ?? t.streamed, conversationId: t.convId ?? null })
         }
         this.pump()
         break
@@ -206,9 +204,18 @@ class Bridge extends EventEmitter {
   }
 
   // one turn at a time per socket — extra sends queue behind the current one
-  chat(incubatorId, text, onEvent) {
+  chat(incubatorId, text, onEvent, conversationId) {
     return new Promise((resolve, reject) => {
-      const job = { incubatorId, text, onEvent, resolve, reject, final: null, streamed: '' }
+      const job = {
+        incubatorId,
+        text,
+        onEvent,
+        resolve,
+        reject,
+        final: null,
+        streamed: '',
+        convId: conversationId || null,
+      }
       if (this.turn) this.queue.push(job)
       else this.start(job)
     })
@@ -235,7 +242,7 @@ class Bridge extends EventEmitter {
           type: 'chat',
           incubator_id: job.incubatorId,
           message: job.text,
-          ...(this.conversationId ? { conversation_id: this.conversationId } : {}),
+          ...(job.convId ? { conversation_id: job.convId } : {}),
         })
       )
     } catch (e) {
@@ -256,10 +263,6 @@ class Bridge extends EventEmitter {
         this.ws.send(JSON.stringify({ type: 'list' }))
       } catch {}
     }
-  }
-
-  resetThread() {
-    this.conversationId = null
   }
 
   retry() {

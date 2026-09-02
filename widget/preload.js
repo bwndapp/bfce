@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld('widget', {
   resetThread: () => ipcRenderer.send('reset-thread'),
   ogFetch: (url) => ipcRenderer.invoke('og-fetch', url),
   toggleChat: () => ipcRenderer.send('toggle-chat'),
+  faceMenu: () => ipcRenderer.send('face-menu'),
   closeChat: () => ipcRenderer.send('close-chat'),
   chatSize: (h) => ipcRenderer.send('chat-size', h),
   chatSend: (text) => ipcRenderer.send('chat-send', text),
