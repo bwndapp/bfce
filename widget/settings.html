@@ -5,6 +5,7 @@
     <title>bbot settings</title>
     <style>
       :root {
+        color-scheme: dark; /* native popups (select lists) render dark */
         --bg: rgba(15, 17, 20, 0.9);
         --line: rgba(255, 255, 255, 0.07);
         --line-strong: rgba(255, 255, 255, 0.12);
@@ -677,6 +678,10 @@
       select:hover {
         background-color: rgba(255, 255, 255, 0.08);
       }
+      select option {
+        background: #1a1d21;
+        color: var(--text);
+      }
       select:focus {
         border-color: var(--accent);
         box-shadow: 0 0 0 3px var(--accent-soft);
@@ -899,6 +904,8 @@
                 <h2>Chat</h2>
                 <label class="toggle"><input type="checkbox" id="showFeed" /> show conversation history</label>
                 <div class="hint" style="margin-top: 6px">off = just the entry box; the thread still lives in Tension</div>
+                <label class="toggle" style="margin-top: 10px"><input type="checkbox" id="captions" /> closed captions</label>
+                <div class="hint" style="margin-top: 6px">the words appear under the bot as it says them — babble and ElevenLabs both</div>
               </section>
             </div>
           </div>
@@ -1380,6 +1387,8 @@
       // --- chat feed ---
       $('#showFeed').checked = cfg.showFeed !== false
       $('#showFeed').addEventListener('change', (e) => window.widget.setCfg({ showFeed: e.target.checked }))
+      $('#captions').checked = !!cfg.captions
+      $('#captions').addEventListener('change', (e) => window.widget.setCfg({ captions: e.target.checked }))
 
       // --- sync ---
       window.widget.onCfg((c) => {

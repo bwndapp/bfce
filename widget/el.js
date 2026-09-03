@@ -50,7 +50,9 @@ function elStart(key, voiceId, onAudio) {
   ws.on('message', (buf) => {
     try {
       const m = JSON.parse(buf.toString())
-      if (m.audio) onAudio({ b64: m.audio })
+      // alignment rides along: char start times for the chunk, so the face
+      // can caption words as the audio reaches them
+      if (m.audio) onAudio({ b64: m.audio, align: m.normalizedAlignment || m.alignment || null })
       if (m.isFinal) finish()
     } catch {}
   })

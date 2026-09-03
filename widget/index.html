@@ -1189,12 +1189,22 @@
       // --- eyes follow the cursor anywhere on the desktop ---
       const REACH = 500 // px from face centre for full eye deflection
       let last = null
+      // while you type he reads along: the caret wins over the mouse for a
+      // beat after each keystroke, with a small settle so it isn't twitchy
+      let typingUntil = 0
+      window.widget.onCaret(({ x, y }) => {
+        if (dragging) return
+        typingUntil = Date.now() + 1400
+        const clamp = (v) => Math.max(-1, Math.min(1, v / REACH))
+        face.look(clamp(x), clamp(y) * 1.1, 1600)
+      })
       window.widget.onCursor(({ x, y }) => {
         // x/y are relative to the window centre, so this doubles as a
         // hover test that works over the drag region.
         const inside = Math.abs(x) < innerWidth / 2 && Math.abs(y) < innerHeight / 2
         document.body.classList.toggle('hovered', inside)
         if (dragging) return
+        if (Date.now() < typingUntil) return
         const moved = !last || Math.abs(x - last.x) > 2 || Math.abs(y - last.y) > 2
         last = { x, y }
         // Only steer while the cursor is moving; when look() expires the
@@ -1323,6 +1333,55 @@
       }
 
       let phraseTone = 1 // each sentence starts on its own slight key
+      // --- captions: subtitle cues on the audio clock. Words are grouped
+      // into cues (a clause, a sentence, or ten words) the way film subtitles
+      // are; a cue line appears when the voice reaches its first word and each
+      // word lights as it's said. Timers are kept so a hush can drop whatever
+      // hadn't been said yet ---
+      let capTimers = []
+      let capCue = 0
+      let capCueN = 0
+      let capCueOpen = false
+      function capSchedule(at, msg) {
+        if (!cfg.captions) return
+        const ms = Math.max(0, (at - vctx.currentTime) * 1000)
+        const t = setTimeout(() => {
+          capTimers = capTimers.filter((x) => x !== t)
+          window.widget.caption(msg)
+        }, ms)
+        capTimers.push(t)
+      }
+      // cue bookkeeping: open a cue for a word, then decide if it closes it
+      const cueOpen = () => {
+        if (!capCueOpen) {
+          capCue++
+          capCueN = 0
+          capCueOpen = true
+        }
+        capCueN++
+        return capCue
+      }
+      const cueAfter = (word) => {
+        const tail = word.replace(/["')\]]+$/, '').slice(-1)
+        if (/[.!?]/.test(tail) || (/[,;:—]/.test(tail) && capCueN >= 4) || capCueN >= 10) capCueOpen = false
+      }
+      function captionEnd(at, immediate) {
+        capCueOpen = false
+        if (!cfg.captions) return
+        if (immediate) {
+          for (const t of capTimers) clearTimeout(t)
+          capTimers = []
+          window.widget.caption({ end: true })
+          return
+        }
+        capSchedule(at, { end: true })
+      }
+      function captionClear() {
+        capCueOpen = false
+        for (const t of capTimers) clearTimeout(t)
+        capTimers = []
+        window.widget.caption({ clear: true })
+      }
       function speakWord(word, punct, caps) {
         const pitch = cfg.voicePitch || 1
         if (sentencePos === 0) phraseTone = 0.96 + hash(word + 'P') * 0.08
@@ -1376,7 +1435,11 @@
         }
         const now = vctx.currentTime
         if (hush) {
-          // the text finished rendering — fade the remaining babble fast
+          // the text finished rendering — fade the remaining babble fast,
+          // and let the captions close on what was actually said. Only the
+          // babble is hushed here: an ElevenLabs voice plays on, so its
+          // captions do too
+          if (!elStarted) captionEnd(0, true)
           master.gain.cancelScheduledValues(now)
           master.gain.setValueAtTime(master.gain.value, now)
           master.gain.linearRampToValueAtTime(0.0001, now + 0.22)
@@ -1407,12 +1470,17 @@
           const m = tok.toLowerCase().replace(/[`*_#>[\]()~|=+-]/g, '')
           const word = m.replace(/[^a-z0-9']/g, '')
           const punct = m.replace(/[a-z0-9']/g, '')
-          if (word) speakWord(word, punct, caps)
-          else if (/[.!?]/.test(punct)) {
+          if (word) {
+            const shown = tok.replace(/[`*_#>~|]/g, '')
+            capSchedule(vt, { cue: cueOpen(), word: shown })
+            cueAfter(shown)
+            speakWord(word, punct, caps)
+          } else if (/[.!?]/.test(punct)) {
             sentencePos = 0
             vt += 0.15
           }
         }
+        if (done) captionEnd(vt + 0.2)
       })
 
       // --- bot idle: nothing has happened TO homie — no chats, pokes, or
@@ -1441,8 +1509,28 @@
       let elTime = 0
       let elSources = []
       let elStarted = false
-      window.widget.onElAudio(({ b64, done, stop }) => {
+      let elWordBuf = '' // a word split across alignment messages
+      let elWordAt = 0
+      // words from one alignment message, grouped into cues. A cue's whole
+      // text is previewed (dim) when the voice reaches its first word, then
+      // each word lights on its own time
+      function elCaption(wordsAt) {
+        const groups = new Map()
+        for (const [w, at] of wordsAt) {
+          const id = cueOpen()
+          if (!groups.has(id)) groups.set(id, [])
+          groups.get(id).push([w, at])
+          cueAfter(w)
+        }
+        for (const [id, list] of groups) {
+          capSchedule(list[0][1] - 0.04, { cue: id, words: list.map((x) => x[0]) })
+          for (const [w, at] of list) capSchedule(at, { cue: id, word: w })
+        }
+      }
+      window.widget.onElAudio(({ b64, done, stop, align }) => {
         if (stop) {
+          captionClear()
+          elWordBuf = ''
           for (const s of elSources) {
             try {
               s.stop()
@@ -1456,6 +1544,9 @@
         if (done) {
           // report when the last scheduled chunk actually finishes playing
           const wait = vctx ? Math.max(0, elTime - vctx.currentTime) * 1000 + 60 : 0
+          if (elWordBuf) elCaption([[elWordBuf, elWordAt]]) // the last word
+          elWordBuf = ''
+          captionEnd(elTime + 0.15)
           setTimeout(() => {
             elStarted = false
             window.widget.elMark({ ended: true })
@@ -1488,6 +1579,26 @@
           elStarted = true
           const delay = Math.max(0, elTime - now) * 1000 + 30
           setTimeout(() => window.widget.elMark({ started: true }), delay)
+        }
+        // captions: the alignment gives each character a start time relative
+        // to the start of the chunk that carries it (the times run on past
+        // the chunk into the ones that follow, which arrive without
+        // alignment). Audio is gapless, so chunk start + offset is exact
+        if (cfg.captions && align?.chars?.length) {
+          const starts = align.charStartTimesMs || align.char_start_times_ms || []
+          const wordsAt = []
+          for (let i = 0; i < align.chars.length; i++) {
+            const c = align.chars[i]
+            const at = elTime + (starts[i] || 0) / 1000
+            if (/\s/.test(c)) {
+              if (elWordBuf) wordsAt.push([elWordBuf, elWordAt])
+              elWordBuf = ''
+            } else {
+              if (!elWordBuf) elWordAt = at
+              elWordBuf += c
+            }
+          }
+          if (wordsAt.length) elCaption(wordsAt)
         }
         elTime += buf.duration
         elSources.push(src)

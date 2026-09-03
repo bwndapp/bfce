@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>bbot captions</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --face-skin: #16181a;
+        --face-ink: #e9ebec;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        user-select: none;
+        pointer-events: none;
+      }
+      /* the strip hugs the top of its window, right under the head */
+      #wrap {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        display: flex;
+        justify-content: center;
+        padding: 4px 10px;
+      }
+      #cap {
+        position: relative;
+        box-sizing: border-box;
+        max-width: 100%;
+        min-width: 120px;
+        padding: 7px 14px 8px;
+        border-radius: 14px;
+        background: rgba(10, 12, 15, 0.8);
+        backdrop-filter: blur(14px) saturate(1.2);
+        -webkit-backdrop-filter: blur(14px) saturate(1.2);
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-bottom: 2px solid var(--face-ink);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.05),
+          0 10px 26px rgba(0, 0, 0, 0.45);
+        font: 600 15px/1.35 system-ui, -apple-system, 'Segoe UI', sans-serif;
+        letter-spacing: 0.005em;
+        color: #f2f4f6;
+        text-align: center;
+        opacity: 0;
+        transform: translateY(6px) scale(0.98);
+        transition:
+          opacity 200ms cubic-bezier(0.2, 0, 0, 1),
+          transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      body.on #cap {
+        opacity: 1;
+        transform: none;
+      }
+      /* one cue line at a time; a new cue slides the old one away */
+      .line {
+        text-wrap: balance;
+        animation: cuein 180ms cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .line.out {
+        position: absolute;
+        left: 14px;
+        right: 14px;
+        top: 7px;
+        animation: cueout 160ms cubic-bezier(0.2, 0, 0, 1) forwards;
+      }
+      @keyframes cuein {
+        from {
+          opacity: 0;
+          transform: translateY(5px);
+        }
+      }
+      @keyframes cueout {
+        to {
+          opacity: 0;
+          transform: translateY(-6px);
+        }
+      }
+      .w {
+        display: inline;
+        white-space: pre-wrap;
+        opacity: 0.3;
+        transition:
+          opacity 120ms cubic-bezier(0.2, 0, 0, 1),
+          color 200ms,
+          text-shadow 200ms;
+      }
+      .w.said {
+        opacity: 0.92;
+      }
+      .w.now {
+        opacity: 1;
+        color: var(--face-ink);
+        text-shadow: 0 0 10px color-mix(in srgb, var(--face-ink) 55%, transparent);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="wrap"><div id="cap"></div></div>
+    <script>
+      window.addEventListener('error', (e) =>
+        window.widget?.rlog?.(`captions: ${e.message} @${e.lineno}`)
+      )
+      const cap = document.getElementById('cap')
+      let cue = null // id of the cue on screen
+      let line = null
+      let spans = []
+      let hideTimer = null
+
+      const applyColors = (c) => {
+        document.documentElement.style.setProperty('--face-skin', c.skin || '#16181a')
+        document.documentElement.style.setProperty('--face-ink', c.ink || '#e9ebec')
+      }
+      window.widget.getCfg().then(applyColors)
+      window.widget.onCfg(applyColors)
+
+      // main sizes the window to a wide strip; the page reports the height
+      // it needs so a two-line cue is never clipped
+      let lastH = 0
+      const report = () => {
+        const h = Math.ceil(cap.getBoundingClientRect().height) + 10
+        if (Math.abs(h - lastH) >= 4) {
+          lastH = h
+          window.widget.captionSize(h)
+        }
+      }
+
+      const clear = () => {
+        cue = null
+        line = null
+        spans = []
+        cap.replaceChildren()
+        document.body.classList.remove('on')
+      }
+      const newLine = (id) => {
+        if (line) {
+          const old = line
+          old.classList.add('out')
+          setTimeout(() => old.remove(), 170)
+        }
+        cue = id
+        line = document.createElement('div')
+        line.className = 'line'
+        cap.appendChild(line)
+        spans = []
+      }
+      const addWord = (text, state) => {
+        const el = document.createElement('span')
+        el.className = 'w' + (state ? ' ' + state : '')
+        el.textContent = (spans.length ? ' ' : '') + text
+        line.appendChild(el)
+        spans.push(el)
+        return el
+      }
+      const show = () => {
+        clearTimeout(hideTimer)
+        document.body.classList.add('on')
+        report()
+      }
+      // the whole cue, dim, ahead of the voice (ElevenLabs knows its words)
+      const preview = (id, words) => {
+        if (id !== cue) newLine(id)
+        for (const w of words) addWord(w, '')
+        show()
+      }
+      // a word is being said: light it. If it was previewed, it's the next
+      // dim span; otherwise (babble) it's appended as it comes
+      const key = (t) => t.toLowerCase().replace(/[^\p{L}\p{N}']/gu, '')
+      const say = (id, word) => {
+        if (id !== cue) newLine(id)
+        for (const s of spans) if (s.classList.contains('now')) s.className = 'w said'
+        // find this word among the dim (unsaid) spans: normally the very next
+        // one, else skip ahead to it, lighting what was skipped. Only when
+        // it's nowhere in the preview does it get appended (the babble path)
+        const dim = spans.filter((s) => s.className === 'w')
+        const k = key(word)
+        const hit = dim.find((s) => key(s.textContent) === k)
+        if (hit) {
+          for (const s of dim) {
+            if (s === hit) break
+            s.className = 'w said'
+          }
+          hit.className = 'w now'
+        } else if (dim.length && !k) {
+          dim[0].className = 'w now' // punctuation-only token: take the next slot
+        } else addWord(word, 'now')
+        show()
+      }
+      const end = () => {
+        for (const s of spans) s.className = 'w said'
+        clearTimeout(hideTimer)
+        hideTimer = setTimeout(() => {
+          document.body.classList.remove('on')
+          setTimeout(clear, 260)
+        }, 1600)
+      }
+
+      window.widget.onCaption((m) => {
+        if (m.clear) return clear()
+        if (m.end) return end()
+        if (m.words) return preview(m.cue, m.words)
+        if (m.word) say(m.cue, m.word)
+      })
+    </script>
+  </body>
+</html>

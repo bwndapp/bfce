@@ -600,6 +600,37 @@
         report()
       }
       input.addEventListener('input', grow)
+
+      // --- he watches you type: the caret's screen position goes to the
+      // face, which looks at it. Measured with a mirror of the textarea so
+      // wrapped lines and scrolling land in the right place ---
+      const mirror = document.createElement('div')
+      mirror.setAttribute('aria-hidden', 'true')
+      mirror.style.cssText =
+        'position:absolute;visibility:hidden;left:-9999px;top:0;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:break-word;'
+      document.body.appendChild(mirror)
+      let caretTimer = null
+      const caretAt = () => {
+        if (document.activeElement !== input) return
+        const cs = getComputedStyle(input)
+        for (const k of ['font', 'letterSpacing', 'lineHeight', 'padding', 'border', 'boxSizing', 'width'])
+          mirror.style[k] = cs[k]
+        const head = input.value.slice(0, input.selectionStart ?? input.value.length)
+        mirror.textContent = head
+        const mark = document.createElement('span')
+        mark.textContent = head.endsWith('\n') || !head ? '.' : '\u200b'
+        mirror.appendChild(mark)
+        const r = input.getBoundingClientRect()
+        const lh = parseFloat(cs.lineHeight) || 18
+        const x = r.left + mark.offsetLeft
+        const y = r.top + mark.offsetTop - input.scrollTop + lh / 2
+        window.widget.caretAt({ x: window.screenX + x, y: window.screenY + y })
+      }
+      for (const ev of ['input', 'keyup', 'click', 'focus'])
+        input.addEventListener(ev, () => {
+          clearTimeout(caretTimer)
+          caretTimer = setTimeout(caretAt, 16)
+        })
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
           window.widget.voiceStop()

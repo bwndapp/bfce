@@ -48,6 +48,7 @@ const GLOBAL_DEFAULTS = {
   presets: [], // user-saved looks, shared by every bbot
   elKey: '', // ElevenLabs API key (global)
   showFeed: true, // chat shows the conversation, or just the entry box
+  captions: false, // closed captions under the bot while it speaks
 }
 
 const cfgPath = () => path.join(app.getPath('userData'), 'widget-config.json')
@@ -128,11 +129,12 @@ const mergedCfg = (inst) => ({
   styleDefaults: STYLE_DEFAULTS,
   elKey: cfg.elKey,
   showFeed: cfg.showFeed,
+  captions: cfg.captions,
 })
 
 function botOf(e) {
   for (const inst of instances.values()) {
-    for (const w of [inst.win, inst.chat, inst.settings]) {
+    for (const w of [inst.win, inst.chat, inst.settings, inst.cap]) {
       if (w && !w.isDestroyed() && w.webContents === e.sender) return inst
     }
   }
@@ -147,7 +149,7 @@ const toChat = (inst, ch, p) =>
 function broadcastCfg() {
   for (const inst of instances.values()) {
     const c = mergedCfg(inst)
-    for (const w of [inst.win, inst.chat, inst.settings]) {
+    for (const w of [inst.win, inst.chat, inst.settings, inst.cap]) {
       if (w && !w.isDestroyed()) w.webContents.send('cfg', c)
     }
   }
@@ -162,6 +164,8 @@ function spawnBot(incubator, { primary: isPrimary = false, x, y } = {}) {
     chat: null,
     settings: null,
     chatH: 60,
+    cap: null, // the caption strip, made on first word
+    capH: 44,
     resizing: false,
     moving: null,
     adjusting: false,
@@ -194,6 +198,7 @@ function spawnBot(incubator, { primary: isPrimary = false, x, y } = {}) {
     if (!inst.win.isDestroyed() && !inst.resizing && !inst.adjusting)
       inst.win.webContents.send('dragging', screenPos(inst.win))
     positionChat(inst)
+    positionCaptions(inst)
   })
   // the chrome reflection is anchored to the screen, so it needs to know
   // where the window starts out
@@ -218,7 +223,7 @@ function screenPos(w) {
 function closeBot(inst) {
   if (!instances.has(inst.key)) return
   instances.delete(inst.key)
-  for (const w of [inst.chat, inst.settings]) {
+  for (const w of [inst.chat, inst.settings, inst.cap]) {
     if (w && !w.isDestroyed()) w.destroy()
   }
   if (inst.win && !inst.win.isDestroyed()) inst.win.destroy()
@@ -261,6 +266,7 @@ function motionTick() {
         inst.pin = null
         inst.adjusting = false
         positionChat(inst)
+        positionCaptions(inst)
       } else busy = true
     } else if (inst.moving) {
       // full bounds with the size captured at drag start — setPosition alone
@@ -440,6 +446,85 @@ function toggleSettings(inst) {
   inst.settings.on('closed', () => (inst.settings = null))
 }
 
+// --- captions: a click-through strip under the face that prints each word
+// as the voice reaches it. The face window owns the audio clock and sends
+// the words; this just hosts and places them ---
+function captionBounds(inst) {
+  const b = inst.win.getBounds()
+  const area = screen.getDisplayMatching(b).workArea
+  const w = Math.max(280, Math.min(520, Math.round(b.width * 1.8)))
+  const h = Math.max(44, Math.min(160, inst.capH))
+  let x = Math.round(b.x + b.width / 2 - w / 2)
+  x = Math.max(area.x, Math.min(x, area.x + area.width - w))
+  // tucked under the head: the face sits 15% in from the window edge
+  let y = Math.round(b.y + b.height * 0.86)
+  if (y + h > area.y + area.height) y = Math.round(b.y - h + b.height * 0.12) // no room: over the brow
+  return { x, y, width: w, height: h }
+}
+function positionCaptions(inst) {
+  if (!inst.cap || inst.cap.isDestroyed() || !inst.win || inst.win.isDestroyed()) return
+  inst.cap.setBounds(captionBounds(inst))
+}
+function captionWindow(inst) {
+  if (inst.cap && !inst.cap.isDestroyed()) return inst.cap
+  inst.cap = new BrowserWindow({
+    ...captionBounds(inst),
+    icon: ICON,
+    show: false,
+    transparent: true,
+    frame: false,
+    resizable: false,
+    movable: false,
+    focusable: false,
+    maximizable: false,
+    fullscreenable: false,
+    alwaysOnTop: true,
+    hasShadow: false,
+    skipTaskbar: true,
+    webPreferences: { preload: path.join(__dirname, 'preload.js') },
+  })
+  inst.cap.setAlwaysOnTop(true, 'screen-saver')
+  inst.cap.setIgnoreMouseEvents(true) // never in the way of a click
+  inst.cap.loadFile('captions.html')
+  inst.cap.on('closed', () => (inst.cap = null))
+  return inst.cap
+}
+function hideCaptions(inst) {
+  if (inst.cap && !inst.cap.isDestroyed()) {
+    inst.cap.webContents.send('caption', { clear: true })
+    inst.cap.hide()
+  }
+}
+ipcMain.on('caption', (e, m) => {
+  const inst = botOf(e)
+  if (!inst?.win || inst.win.isDestroyed()) return
+  if (!cfg.captions) return
+  if (m.clear) return hideCaptions(inst)
+  const cap = captionWindow(inst)
+  const deliver = () => {
+    if (cap.isDestroyed()) return
+    if ((m.word || m.words) && !cap.isVisible()) {
+      positionCaptions(inst)
+      cap.showInactive()
+    }
+    cap.webContents.send('caption', m)
+    if (m.end) {
+      clearTimeout(inst.capHide)
+      inst.capHide = setTimeout(() => cap.isDestroyed() || cap.hide(), 2600)
+    } else clearTimeout(inst.capHide)
+  }
+  if (cap.webContents.isLoading()) cap.webContents.once('did-finish-load', deliver)
+  else deliver()
+})
+ipcMain.on('caption-size', (e, h) => {
+  const inst = botOf(e)
+  if (!inst) return
+  const next = Math.max(44, Math.min(160, Math.round(h)))
+  if (next === inst.capH) return
+  inst.capH = next
+  positionCaptions(inst)
+})
+
 // --- the right-click menu: clone a bbot per incubator, dismiss clones ---
 function faceMenu(inst) {
   const nameOf = (id) => bridge.incubators.find((i) => i.id === id)?.name || id || 'unbound'
@@ -568,11 +653,13 @@ ipcMain.on('set-cfg', (e, patch) => {
   for (const k of STYLE_KEYS) {
     if (k in patch) cfg.bots[styleTarget] = { ...cfg.bots[styleTarget], [k]: patch[k] }
   }
-  for (const k of ['server', 'token', 'autoConnect', 'presets', 'elKey', 'showFeed']) {
+  for (const k of ['server', 'token', 'autoConnect', 'presets', 'elKey', 'showFeed', 'captions']) {
     if (k in patch) cfg[k] = patch[k]
   }
   save()
   broadcastCfg()
+  if ('captions' in patch && !patch.captions)
+    for (const i of instances.values()) hideCaptions(i)
 })
 ipcMain.on('react', (e, name) => toWin(botOf(e), 'react', name))
 ipcMain.on('set-size', (e, size) => {
@@ -718,6 +805,14 @@ ipcMain.on('voice-stop', (e) => {
   toWin(inst, 'el-audio', { stop: true })
   toWin(inst, 'speak', { hush: true })
   toChat(inst, 'voice-mark', { ended: true }) // free the text to finish
+})
+// typing in the chat box: the caret's screen point, made relative to the
+// face's centre so the renderer can look at it the way it looks at the cursor
+ipcMain.on('caret', (e, p) => {
+  const inst = botOf(e)
+  if (!inst?.win || inst.win.isDestroyed() || !p) return
+  const b = inst.win.getBounds()
+  toWin(inst, 'caret', { x: p.x - (b.x + b.width / 2), y: p.y - (b.y + b.height / 2) })
 })
 // the face window owns the audio clock; it reports when speech starts/ends
 ipcMain.on('el-mark', (e, m) => toChat(botOf(e), 'voice-mark', m))
