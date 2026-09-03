@@ -491,6 +491,7 @@
                 <div class="crow"><span class="lbl">bloom</span><input type="range" id="fxBloom" min="0" max="100" /></div>
                 <div class="crow"><span class="lbl">halation</span><input type="range" id="fxHalation" min="0" max="100" /></div>
                 <div class="crow"><span class="lbl">scanlines</span><input type="range" id="fxScan" min="0" max="100" /></div>
+                <div class="crow"><span class="lbl">gloss</span><input type="range" id="fxGloss" min="0" max="100" /></div>
               </section>
               <section>
                 <h2>Head</h2>
@@ -692,7 +693,7 @@
       $('#pupils').addEventListener('change', (e) => window.widget.setCfg({ pupils: e.target.checked }))
 
       // --- fx ---
-      for (const key of ['fxBloom', 'fxHalation', 'fxScan', 'fxChrome', 'fxHolo', 'fxHue', 'fxRim', 'fxGlass', 'fxGlass']) {
+      for (const key of ['fxBloom', 'fxHalation', 'fxScan', 'fxChrome', 'fxHolo', 'fxHue', 'fxRim', 'fxGlass', 'fxGloss', 'fxGlass']) {
         const el = $('#' + key)
         el.value = (cfg[key] || 0) * 100
         el.addEventListener('input', () => window.widget.setCfg({ [key]: +el.value / 100 }))
@@ -777,7 +778,7 @@
       ]
       const LOOK_KEYS = [
         'skin', 'ink', 'pupils', 'aura', 'voice', 'voicePitch', 'voiceMode', 'elVoice',
-        'fxBloom', 'fxHalation', 'fxScan', 'fxChrome', 'fxHolo', 'fxHue', 'fxRim', 'fxGlass',
+        'fxBloom', 'fxHalation', 'fxScan', 'fxChrome', 'fxHolo', 'fxHue', 'fxRim', 'fxGlass', 'fxGloss',
       ]
       function renderPresets() {
         const row = $('#presets')
@@ -895,7 +896,7 @@
         renderVoiceMode()
         loadElVoices()
         $('#voiceOn').checked = cfg.voice !== false
-        for (const key of ['fxBloom', 'fxHalation', 'fxScan', 'fxChrome', 'fxHolo', 'fxHue', 'fxRim', 'fxGlass', 'fxGlass']) $('#' + key).value = (cfg[key] || 0) * 100
+        for (const key of ['fxBloom', 'fxHalation', 'fxScan', 'fxChrome', 'fxHolo', 'fxHue', 'fxRim', 'fxGlass', 'fxGloss', 'fxGlass']) $('#' + key).value = (cfg[key] || 0) * 100
         refreshSelection()
       })
 

@@ -26,6 +26,7 @@
         /* clickable (click = chat, press-and-move = drag), so no OS drag region */
         -webkit-app-region: no-drag;
         cursor: grab;
+        will-change: transform;
         /* he floats: an irregular, barely-there drift over a grounded shadow */
         animation: hoverfloat 8.5s ease-in-out infinite;
       }
@@ -77,6 +78,11 @@
       #face .bwm {
         filter: var(--fx-eyes, none);
       }
+      /* fx: eye gloss — anime catchlights riding the eyeballs */
+      .bwf-eyegloss {
+        opacity: var(--fx-gloss-o, 0);
+        pointer-events: none;
+      }
       /* fx: CRT scanlines live on the ink itself — eyes and mouth */
       .bwf-eyescan,
       .bwm-scan {
@@ -99,6 +105,7 @@
         );
         pointer-events: none;
         z-index: 0;
+        will-change: transform, opacity;
       }
       #face:active {
         cursor: grabbing;
@@ -366,6 +373,7 @@
         }
         faceEl.style.setProperty('--fx-eyes', f.join(' ') || 'none')
         faceEl.style.setProperty('--fx-scan-o', ((+cfg.fxScan || 0) * 0.6).toFixed(2))
+        faceEl.style.setProperty('--fx-gloss-o', ((+cfg.fxGloss || 0) * 0.9).toFixed(2))
         faceEl.style.setProperty('--fx-chrome-o', ((+cfg.fxChrome || 0) * 0.9 * (1 - glass * 0.75)).toFixed(2))
         faceEl.style.setProperty('--fx-glass-o', (glass * 0.9).toFixed(2))
         faceEl.style.setProperty('--fx-holo-o', ((+cfg.fxHolo || 0) * 0.22).toFixed(2))
@@ -432,6 +440,13 @@
           sc.setAttribute('r', '12.6')
           sc.setAttribute('fill', 'url(#bwscan)')
           firstLid.parentNode.insertBefore(sc, firstLid)
+          const gl = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+          gl.setAttribute('class', 'bwf-eyegloss')
+          gl.innerHTML =
+            '<circle cx="-4" cy="-4.5" r="3.4" fill="url(#bwx-glossg)" opacity="0.95"/>' +
+            '<circle cx="3.4" cy="2.6" r="1.6" fill="url(#bwx-glossg)" opacity="0.75"/>'
+          firstLid.parentNode.insertBefore(gl, firstLid)
+          c.gloss = gl
         }
         mOpen = 0
         mVis = 0
@@ -525,7 +540,7 @@
         g.style.pointerEvents = 'none'
         if (cfg.aura === 'glow') {
           g.innerHTML =
-            '<circle r="46" fill="none" stroke-width="7" opacity="0.3" style="filter: blur(3px)"/>'
+            '<g fill="none"><circle r="46" stroke-width="4" opacity="0.22"/><circle r="47.5" stroke-width="5" opacity="0.13"/><circle r="49.5" stroke-width="7" opacity="0.07"/></g>'
         } else if (cfg.aura === 'ring') {
           // SMIL rotate about (0,0): a slow, quiet orbit — the face floats,
           // the ring barely stirs
@@ -575,6 +590,9 @@
           '<pattern id="bwscan" patternUnits="userSpaceOnUse" width="4" height="3">' +
             '<rect x="0" y="0" width="4" height="1.3" fill="#000"/></pattern>' +
             '<clipPath id="bwx-headclip"><circle r="46"/></clipPath>' +
+            '<radialGradient id="bwx-glossg"><stop offset="0" stop-color="#fff" stop-opacity="1"/>' +
+            '<stop offset="0.55" stop-color="#fff" stop-opacity="0.55"/>' +
+            '<stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>' +
             '<linearGradient id="bwx-chromebase" gradientUnits="userSpaceOnUse" x1="0" y1="-64" x2="0" y2="64">' +
             '<stop offset="0" stop-color="#dceaf5"/>' +
             '<stop offset="0.45" stop-color="#8fa3b2"/>' +
@@ -611,12 +629,12 @@
         cg.innerHTML =
           '<g class="bwx-chromeR">' +
           '<rect x="-64" y="-64" width="128" height="128" fill="url(#bwx-chromebase)"/>' +
-          '<g style="filter: blur(4.5px)">' +
-          '<rect x="-75" y="-32" width="160" height="15" fill="#f4faff" opacity="0.5" transform="rotate(-18)">' +
+          '<g>' +
+          '<rect x="-75" y="-34" width="160" height="19" rx="9" fill="#f4faff" opacity="0.32" transform="rotate(-18)">' +
           '<animateTransform attributeName="transform" type="translate" values="0 0; 7 3; 0 0" dur="27s" repeatCount="indefinite" additive="sum"/>' +
           '</rect>' +
-          '<rect x="-75" y="6" width="160" height="8" fill="#e2eff9" opacity="0.35" transform="rotate(-18)"/>' +
-          '<rect x="-75" y="24" width="160" height="20" fill="#10151a" opacity="0.35" transform="rotate(-13)">' +
+          '<rect x="-75" y="4" width="160" height="12" rx="6" fill="#e2eff9" opacity="0.22" transform="rotate(-18)"/>' +
+          '<rect x="-75" y="22" width="160" height="24" rx="12" fill="#10151a" opacity="0.24" transform="rotate(-13)">' +
           '<animateTransform attributeName="transform" type="translate" values="0 0; -6 -2; 0 0" dur="34s" repeatCount="indefinite" additive="sum"/>' +
           '</rect>' +
           '<circle cx="-20" cy="-28" r="26" fill="#ffffff" opacity="0.22"/>' +
@@ -630,41 +648,54 @@
         hx.setAttribute('class', 'bwhx')
         hx.style.pointerEvents = 'none'
         hx.innerHTML =
-          '<g clip-path="url(#bwx-headclip)" style="opacity: var(--fx-holo-o, 0); filter: blur(2px)">' +
+          '<g clip-path="url(#bwx-headclip)" style="opacity: var(--fx-holo-o, 0)">' +
           '<rect x="-70" y="-70" width="140" height="140" fill="url(#bwx-holo)">' +
           '<animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="22s" repeatCount="indefinite"/>' +
           '</rect></g>' +
           '<g style="opacity: var(--fx-glass-o, 0)">' +
-          '<circle r="43.1" fill="none" stroke="#ff4d6d" stroke-width="1.3" opacity="0.4" style="filter: blur(0.9px); mix-blend-mode: screen"/>' +
-          '<circle r="43.5" fill="none" stroke="#7dffb0" stroke-width="1.3" opacity="0.4" style="filter: blur(0.9px); mix-blend-mode: screen"/>' +
-          '<circle r="43.9" fill="none" stroke="#55c8ff" stroke-width="1.3" opacity="0.4" style="filter: blur(0.9px); mix-blend-mode: screen"/>' +
-          '<circle r="39.5" fill="none" stroke="#000000" stroke-width="4.5" opacity="0.14" style="filter: blur(2.5px)"/>' +
-          '<g style="filter: blur(2px); mix-blend-mode: screen">' +
-          '<path d="M -30 32 A 44 44 0 0 0 12 42" fill="none" stroke="#ff5d7a" stroke-width="2.2" opacity="0.35" stroke-linecap="round"/>' +
-          '<path d="M 40 18 A 44 44 0 0 0 30 -32" fill="none" stroke="#66d9ff" stroke-width="2.2" opacity="0.35" stroke-linecap="round"/>' +
-          '<path d="M -12 -42 A 44 44 0 0 0 -42 -10" fill="none" stroke="#b58cff" stroke-width="2.2" opacity="0.3" stroke-linecap="round"/>' +
+          '<circle r="43.1" fill="none" stroke="#ff4d6d" stroke-width="1.5" opacity="0.34" style="mix-blend-mode: screen"/>' +
+          '<circle r="43.5" fill="none" stroke="#7dffb0" stroke-width="1.5" opacity="0.34" style="mix-blend-mode: screen"/>' +
+          '<circle r="43.9" fill="none" stroke="#55c8ff" stroke-width="1.5" opacity="0.34" style="mix-blend-mode: screen"/>' +
+          '<circle r="39.5" fill="none" stroke="#000000" stroke-width="6.5" opacity="0.09"/>' +
+          '<g style="mix-blend-mode: screen">' +
+          '<path d="M -30 32 A 44 44 0 0 0 12 42" fill="none" stroke="#ff5d7a" stroke-width="3.4" opacity="0.22" stroke-linecap="round"/>' +
+          '<path d="M 40 18 A 44 44 0 0 0 30 -32" fill="none" stroke="#66d9ff" stroke-width="3.4" opacity="0.22" stroke-linecap="round"/>' +
+          '<path d="M -12 -42 A 44 44 0 0 0 -42 -10" fill="none" stroke="#b58cff" stroke-width="3.4" opacity="0.18" stroke-linecap="round"/>' +
           '<animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="42s" repeatCount="indefinite"/>' +
           '</g>' +
-          '<path d="M -18 40 A 44 44 0 0 0 40 -18" fill="none" stroke="#ffffff" stroke-width="2.6" opacity="0.3" stroke-linecap="round" style="filter: blur(1.4px)"/>' +
+          '<path d="M -18 40 A 44 44 0 0 0 40 -18" fill="none" stroke="#ffffff" stroke-width="3.6" opacity="0.2" stroke-linecap="round"/>' +
           '</g>' +
-          '<circle r="45" fill="none" stroke-width="2.4" style="stroke: var(--aura-color); opacity: var(--fx-rim-o, 0); filter: blur(0.6px)"/>'
+          '<circle r="45" fill="none" stroke-width="3" style="stroke: var(--aura-color); opacity: var(--fx-rim-o, 0)"/>'
         headGroupEl.appendChild(hx)
       }
 
       const TR = /translate\((-?[\d.]+)[ ,](-?[\d.]+)\)/
-      function extrasFrame() {
+      let lastFrameT = 0
+      let lastGroundKey = ''
+      let lastChromeKey = ''
+      let lastGlossKey = ''
+      function extrasFrame(ts) {
         if (!headGroupEl || !headGroupEl.isConnected) {
           extrasRaf = null
           return
         }
         extrasRaf = requestAnimationFrame(extrasFrame)
+        // ~33fps is indistinguishable for lighting; halves the work on
+        // high-refresh monitors
+        if (ts - lastFrameT < 28) return
+        lastFrameT = ts
 
-        // lighting dynamics: the ground shadow reacts to how high he is
+        // lighting dynamics: the ground shadow reacts to how high he is —
+        // but only write styles when the values meaningfully changed
         const hm = TR.exec(headGroupEl.getAttribute('transform') || '')
         const htx = hm ? +hm[1] : 0
         const lift = Math.max(0, hm ? -+hm[2] : 0) // viewBox units off the ground
-        ground.style.transform = `translateX(calc(-50% + ${(htx * 0.6).toFixed(1)}vmin)) scaleX(${Math.max(0.55, 1 - lift / 55).toFixed(3)})`
-        ground.style.opacity = Math.max(0.25, 1 - lift / 30).toFixed(2)
+        const gKey = `${htx.toFixed(1)}|${lift.toFixed(1)}`
+        if (gKey !== lastGroundKey) {
+          lastGroundKey = gKey
+          ground.style.transform = `translateX(calc(-50% + ${(htx * 0.6).toFixed(1)}vmin)) scaleX(${Math.max(0.55, 1 - lift / 55).toFixed(3)})`
+          ground.style.opacity = Math.max(0.25, 1 - lift / 30).toFixed(2)
+        }
 
         // lip-sync: live loudness drives the head jiggle and our talking mouth
         let level = 0
@@ -698,11 +729,23 @@
         face?.talk?.(level)
         updateMouth(level)
         // the chrome environment stays world-anchored as the head turns
-        if (chromeR && chromeR.isConnected)
-          chromeR.setAttribute(
-            'transform',
-            `translate(${(-gSinYaw * 7).toFixed(1)} ${(-gSinPitch * 5).toFixed(1)})`
-          )
+        if (chromeR && chromeR.isConnected) {
+          const cKey = `${(-gSinYaw * 7).toFixed(1)} ${(-gSinPitch * 5).toFixed(1)}`
+          if (cKey !== lastChromeKey) {
+            lastChromeKey = cKey
+            chromeR.setAttribute('transform', `translate(${cKey})`)
+          }
+        }
+        // catchlights are speculars: fixed to the light, so they slide
+        // against the gaze as the eyes rotate under them
+        if ((+cfg.fxGloss || 0) > 0.01) {
+          const gKey2 = `${(-gSinYaw * 4.5).toFixed(1)} ${(-gSinPitch * 3.8).toFixed(1)}`
+          if (gKey2 !== lastGlossKey) {
+            lastGlossKey = gKey2
+            for (const c of eyeCache)
+              if (c.gloss?.isConnected) c.gloss.setAttribute('transform', `translate(${gKey2})`)
+          }
+        }
 
         // eye glow follows the lids: only as much ink as is actually showing
         if ((+cfg.fxBloom || 0) > 0.01 || (+cfg.fxHalation || 0) > 0.01 || (+cfg.fxGlass || 0) > 0.01) {
@@ -719,11 +762,18 @@
               const y = +m2[1]
               lidCover += li === 0 ? (y + 12) / 25 : (12 - y) / 25
             }
-            const vis = Math.max(0, Math.min(1, Math.min(open, 1 - lidCover)))
-            c.el.style.filter = vis > 0.03 ? eyeGlowFilter(vis) : 'none'
+            const vis = Math.round(Math.max(0, Math.min(1, Math.min(open, 1 - lidCover))) * 20) / 20
+            if (c.lastVis !== vis) {
+              c.lastVis = vis
+              c.el.style.filter = vis > 0.03 ? eyeGlowFilter(vis) : 'none'
+            }
           }
         } else {
-          for (const c of eyeCache) if (c.el.style.filter) c.el.style.filter = ''
+          for (const c of eyeCache)
+            if (c.el.style.filter) {
+              c.el.style.filter = ''
+              c.lastVis = -1
+            }
         }
 
       }

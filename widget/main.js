@@ -13,7 +13,7 @@ const ICON = path.join(__dirname, '..', 'docs', 'logo.png')
 const STYLE_KEYS = [
   'skin', 'ink', 'pupils', 'mood', 'voice', 'voicePitch', 'aura',
   'voiceMode', 'elVoice', 'fxBloom', 'fxHalation', 'fxScan',
-  'fxChrome', 'fxHolo', 'fxHue', 'fxRim', 'fxGlass',
+  'fxChrome', 'fxHolo', 'fxHue', 'fxRim', 'fxGlass', 'fxGloss',
 ]
 const STYLE_DEFAULTS = {
   skin: '#16181a',
@@ -33,6 +33,7 @@ const STYLE_DEFAULTS = {
   fxHue: 0,
   fxRim: 0,
   fxGlass: 0,
+  fxGloss: 0,
 }
 const GLOBAL_DEFAULTS = {
   server: 'wss://bwnd.app/api/v1/incubators/public/bbots/ws',
@@ -236,7 +237,15 @@ setInterval(() => {
         height: inst.moving.h,
       })
     }
-    w.webContents.send('cursor', { x: p.x - cx, y: p.y - cy })
+    const kx = p.x - cx
+    const ky = p.y - cy
+    inst.curTick = (inst.curTick || 0) + 1
+    const moved =
+      !inst.lastCur || Math.abs(kx - inst.lastCur.x) >= 1 || Math.abs(ky - inst.lastCur.y) >= 1
+    if (moved || inst.curTick % 15 === 0) {
+      inst.lastCur = { x: kx, y: ky }
+      w.webContents.send('cursor', { x: kx, y: ky })
+    }
   }
 }, 33)
 
