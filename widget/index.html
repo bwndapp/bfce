@@ -26,6 +26,62 @@
         /* clickable (click = chat, press-and-move = drag), so no OS drag region */
         -webkit-app-region: no-drag;
         cursor: grab;
+        /* he floats: an irregular, barely-there drift over a grounded shadow */
+        animation: hoverfloat 8.5s ease-in-out infinite;
+      }
+      @keyframes hoverfloat {
+        0%,
+        100% {
+          transform: translate(0, 0) rotate(0deg);
+        }
+        22% {
+          transform: translate(0.7vmin, -1.6vmin) rotate(1.1deg);
+        }
+        45% {
+          transform: translate(-0.6vmin, -0.5vmin) rotate(-0.9deg);
+        }
+        68% {
+          transform: translate(0.6vmin, -1.9vmin) rotate(0.6deg);
+        }
+        85% {
+          transform: translate(-0.7vmin, -0.6vmin) rotate(-1deg);
+        }
+      }
+      /* hue drift: the whole palette slowly cycles — party mode */
+      #face.huedrift {
+        animation:
+          hoverfloat 8.5s ease-in-out infinite,
+          huespin var(--fx-hue-dur, 20s) linear infinite;
+      }
+      @keyframes huespin {
+        from {
+          filter: hue-rotate(0deg);
+        }
+        to {
+          filter: hue-rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #face {
+          animation: none;
+        }
+      }
+      /* fx: glass — the body fill thins out; lids go glassy with it so
+         blinks stay part of the same material */
+      #face .bwf-head,
+      #face .bwf-lid {
+        fill-opacity: var(--fx-alpha, 1);
+      }
+      /* fx: bloom/halation live on the ink features — the mouth takes the
+         static var; the eyes get per-frame filters scaled by lid openness */
+      #face .bwm {
+        filter: var(--fx-eyes, none);
+      }
+      /* fx: CRT scanlines live on the ink itself — eyes and mouth */
+      .bwf-eyescan,
+      .bwm-scan {
+        opacity: var(--fx-scan-o, 0);
+        pointer-events: none;
       }
       /* the pool of shadow that grounds him on the desktop */
       #ground {
@@ -232,6 +288,12 @@
     </div>
 
     <script type="module">
+      window.addEventListener('error', (e) =>
+        window.widget?.rlog?.(`${location.pathname.split('/').pop()}: ${e.message} @${e.lineno}`)
+      )
+      window.addEventListener('unhandledrejection', (e) =>
+        window.widget?.rlog?.(`${location.pathname.split('/').pop()} promise: ${e.reason}`)
+      )
       import { createFace } from '../dist/face.js'
 
       const faceEl = document.querySelector('#face')
@@ -245,7 +307,7 @@
       }
       // the aura glows in a colour derived from the body: dark skins get a
       // brighter, more saturated self; light skins a deeper one
-      function auraColor(hex) {
+      function auraColor(hex, alpha) {
         const n = parseInt(hex.slice(1), 16)
         let r = ((n >> 16) & 255) / 255
         let g = ((n >> 8) & 255) / 255
@@ -263,7 +325,9 @@
         }
         s = Math.min(1, Math.max(s, 0.3) + 0.15)
         const nl = l < 0.5 ? Math.min(0.72, l + 0.32) : Math.max(0.28, l - 0.28)
-        return `hsl(${h.toFixed(0)} ${(s * 100).toFixed(0)}% ${(nl * 100).toFixed(0)}%)`
+        return `hsl(${h.toFixed(0)} ${(s * 100).toFixed(0)}% ${(nl * 100).toFixed(0)}%${
+          alpha != null ? ` / ${alpha.toFixed(2)}` : ''
+        })`
       }
 
       function applyColors() {
@@ -276,6 +340,40 @@
           '--face-ring',
           luminance(cfg.skin) > 0.5 ? 'rgba(0,0,0,.3)' : '#2f3336'
         )
+        applyFx()
+      }
+
+      // --- post-processing: bloom (tight glow), halation (wide film bleed),
+      // scanlines — each an intensity, all composable ---
+      const hexA = (hex, a) => {
+        const n = parseInt(hex.slice(1), 16)
+        return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a.toFixed(2)})`
+      }
+      function applyFx() {
+        const bloom = +cfg.fxBloom || 0
+        const hal = +cfg.fxHalation || 0
+        const glass = +cfg.fxGlass || 0
+        const f = []
+        // the eyes glow in their own colour: bloom is the tight burn,
+        // halation the wide soft bleed around them
+        if (bloom > 0.01)
+          f.push(`drop-shadow(0 0 ${(0.4 + bloom * 1.4).toFixed(2)}vmin ${hexA(cfg.ink, 0.45 + bloom * 0.5)})`)
+        if (hal > 0.01)
+          f.push(`drop-shadow(0 0 ${(1.5 + hal * 5).toFixed(2)}vmin ${hexA(cfg.ink, 0.1 + hal * 0.3)})`)
+        if (glass > 0.01) {
+          f.push(`drop-shadow(${(glass * 0.35).toFixed(2)}vmin 0 rgba(255, 60, 100, ${(glass * 0.45).toFixed(2)}))`)
+          f.push(`drop-shadow(${(-glass * 0.35).toFixed(2)}vmin 0 rgba(0, 190, 255, ${(glass * 0.45).toFixed(2)}))`)
+        }
+        faceEl.style.setProperty('--fx-eyes', f.join(' ') || 'none')
+        faceEl.style.setProperty('--fx-scan-o', ((+cfg.fxScan || 0) * 0.6).toFixed(2))
+        faceEl.style.setProperty('--fx-chrome-o', ((+cfg.fxChrome || 0) * 0.9 * (1 - glass * 0.75)).toFixed(2))
+        faceEl.style.setProperty('--fx-glass-o', (glass * 0.9).toFixed(2))
+        faceEl.style.setProperty('--fx-holo-o', ((+cfg.fxHolo || 0) * 0.22).toFixed(2))
+        faceEl.style.setProperty('--fx-rim-o', ((+cfg.fxRim || 0) * 0.85).toFixed(2))
+        faceEl.style.setProperty('--fx-alpha', (1 - (+cfg.fxGlass || 0) * 0.92).toFixed(2))
+        const hue = +cfg.fxHue || 0
+        faceEl.classList.toggle('huedrift', hue > 0.01)
+        faceEl.style.setProperty('--fx-hue-dur', `${(34 - hue * 28).toFixed(1)}s`)
       }
 
       // --- the face (rebuilt when pupils change; that option is creation-time) ---
@@ -317,10 +415,44 @@
         mouthPath = document.createElementNS('http://www.w3.org/2000/svg', 'path')
         mouthPath.style.fill = 'var(--face-ink)'
         mouthG.appendChild(mouthPath)
+        // scanlines painted onto the mouth ink, sharing its every shape
+        mouthScan = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+        mouthScan.setAttribute('class', 'bwm-scan')
+        mouthScan.setAttribute('fill', 'url(#bwscan)')
+        mouthG.appendChild(mouthScan)
         headGroup.appendChild(mouthG)
         eyeEls = [...faceEl.querySelectorAll('.bwf-eye-group')]
+        eyeCache = eyeEls.map((el) => ({ el, lids: el.querySelectorAll('.bwf-lid') }))
+        // and onto each eyeball: inside the clip, above the pupil, under the lids
+        for (const c of eyeCache) {
+          const firstLid = c.lids[0]
+          if (!firstLid || c.el.querySelector('.bwf-eyescan')) continue
+          const sc = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+          sc.setAttribute('class', 'bwf-eyescan')
+          sc.setAttribute('r', '12.6')
+          sc.setAttribute('fill', 'url(#bwscan)')
+          firstLid.parentNode.insertBefore(sc, firstLid)
+        }
         mOpen = 0
         mVis = 0
+      }
+      let mouthScan = null
+      let eyeCache = []
+      function eyeGlowFilter(vis) {
+        const bloom = +cfg.fxBloom || 0
+        const hal = +cfg.fxHalation || 0
+        const glass = +cfg.fxGlass || 0
+        const f = []
+        if (glass > 0.01) {
+          // ink seen through glass splits: red fringe one side, cyan the other
+          f.push(`drop-shadow(${(glass * 0.35).toFixed(2)}vmin 0 rgba(255, 60, 100, ${(glass * 0.45 * vis).toFixed(2)}))`)
+          f.push(`drop-shadow(${(-glass * 0.35).toFixed(2)}vmin 0 rgba(0, 190, 255, ${(glass * 0.45 * vis).toFixed(2)}))`)
+        }
+        if (bloom > 0.01)
+          f.push(`drop-shadow(0 0 ${(0.4 + bloom * 1.4).toFixed(2)}vmin ${hexA(cfg.ink, (0.45 + bloom * 0.5) * vis)})`)
+        if (hal > 0.01)
+          f.push(`drop-shadow(0 0 ${(1.5 + hal * 5).toFixed(2)}vmin ${hexA(cfg.ink, (0.1 + hal * 0.3) * vis)})`)
+        return f.join(' ')
       }
       function updateMouth(level) {
         if (!mouthG || !mouthG.isConnected) return
@@ -339,37 +471,43 @@
         const w = (11.5 - mOpen * 3.2) * (1 + wide * 0.35 - round * 0.42)
         const d = (1.6 + mOpen * 15) * (1 - wide * 0.45 + round * 0.12)
         const tc = 1.6 - wide * 1.1
-        mouthPath.setAttribute(
-          'd',
+        const dAttr =
           `M ${-w.toFixed(2)} 0 Q 0 ${tc.toFixed(2)} ${w.toFixed(2)} 0` +
-            ` Q ${w.toFixed(2)} ${d.toFixed(2)} 0 ${d.toFixed(2)}` +
-            ` Q ${-w.toFixed(2)} ${d.toFixed(2)} ${-w.toFixed(2)} 0 Z`
+          ` Q ${w.toFixed(2)} ${d.toFixed(2)} 0 ${d.toFixed(2)}` +
+          ` Q ${-w.toFixed(2)} ${d.toFixed(2)} ${-w.toFixed(2)} 0 Z`
+        mouthPath.setAttribute('d', dAttr)
+        mouthScan?.setAttribute('d', dAttr)
+        // the library's project() for the mouth anchor (0, 20), r = 46,
+        // using the shared per-frame gaze recovery
+        const cosYaw = Math.sqrt(1 - gSinYaw * gSinYaw)
+        const cosPitch = Math.sqrt(1 - gSinPitch * gSinPitch)
+        const pz = Math.sqrt(46 * 46 - 20 * 20)
+        const x1 = pz * gSinYaw
+        const z1 = pz * cosYaw
+        const y = 20 * cosPitch - z1 * gSinPitch
+        const z2 = 20 * gSinPitch + z1 * cosPitch
+        const squash = Math.max(0.25, Math.min(1, z2 / pz))
+        const phi = ((Math.atan2(y, x1) * 180) / Math.PI).toFixed(1)
+        mouthG.setAttribute(
+          'transform',
+          `translate(${x1.toFixed(2)} ${y.toFixed(2)}) rotate(${phi}) scale(${squash.toFixed(3)} 1) rotate(${-phi})`
         )
-        if (eyeEls.length === 2 && eyeEls[0].isConnected) {
-          const l = TR.exec(eyeEls[0].getAttribute('transform') || '')
-          const r = TR.exec(eyeEls[1].getAttribute('transform') || '')
-          if (l && r) {
-            const midX = (+l[1] + +r[1]) / 2
-            const midY = (+l[2] + +r[2]) / 2
-            mBaseY += (midY - mBaseY) * 0.012
-            const sinYaw = Math.max(-0.9, Math.min(0.9, midX / 41))
-            const cosYaw = Math.sqrt(1 - sinYaw * sinYaw)
-            const sinPitch = Math.max(-0.9, Math.min(0.9, -(midY - mBaseY) / (41 * cosYaw)))
-            const cosPitch = Math.sqrt(1 - sinPitch * sinPitch)
-            // the library's project() for the mouth anchor (0, 20), r = 46
-            const pz = Math.sqrt(46 * 46 - 20 * 20)
-            const x1 = pz * sinYaw
-            const z1 = pz * cosYaw
-            const y = 20 * cosPitch - z1 * sinPitch
-            const z2 = 20 * sinPitch + z1 * cosPitch
-            const squash = Math.max(0.25, Math.min(1, z2 / pz))
-            const phi = ((Math.atan2(y, x1) * 180) / Math.PI).toFixed(1)
-            mouthG.setAttribute(
-              'transform',
-              `translate(${x1.toFixed(2)} ${y.toFixed(2)}) rotate(${phi}) scale(${squash.toFixed(3)} 1) rotate(${-phi})`
-            )
-          }
-        }
+      }
+
+      // shared gaze recovery: the eyes' projected midpoint gives yaw/pitch
+      let gSinYaw = 0
+      let gSinPitch = 0
+      function computeGaze() {
+        if (eyeEls.length !== 2 || !eyeEls[0].isConnected) return
+        const l = TR.exec(eyeEls[0].getAttribute('transform') || '')
+        const r = TR.exec(eyeEls[1].getAttribute('transform') || '')
+        if (!l || !r) return
+        const midX = (+l[1] + +r[1]) / 2
+        const midY = (+l[2] + +r[2]) / 2
+        mBaseY += (midY - mBaseY) * 0.012
+        gSinYaw = Math.max(-0.9, Math.min(0.9, midX / 41))
+        const cosYaw = Math.sqrt(1 - gSinYaw * gSinYaw)
+        gSinPitch = Math.max(-0.9, Math.min(0.9, -(midY - mBaseY) / (41 * cosYaw)))
       }
 
       // --- aura: glow, drifting ring, or orbiting particles, in ink ---
@@ -389,11 +527,11 @@
           g.innerHTML =
             '<circle r="46" fill="none" stroke-width="7" opacity="0.3" style="filter: blur(3px)"/>'
         } else if (cfg.aura === 'ring') {
-          // SMIL rotate about (0,0): orbits the face centre no matter what
-          // transforms the head group carries
+          // SMIL rotate about (0,0): a slow, quiet orbit — the face floats,
+          // the ring barely stirs
           g.innerHTML =
-            '<g><circle r="53" fill="none" stroke-width="2.2" stroke-dasharray="6 7" opacity="0.55"/>' +
-            '<animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="26s" repeatCount="indefinite"/></g>'
+            '<g><circle r="53" fill="none" stroke-width="2.2" stroke-dasharray="6 7" opacity="0.4"/>' +
+            '<animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="48s" repeatCount="indefinite"/></g>'
         } else if (cfg.aura === 'particles') {
           // an emitter, not an orbit: each mote is born at the rim, drifts
           // out and up like an ember, fades through its lifetime, respawns.
@@ -404,15 +542,15 @@
             const r0 = 47 + (i % 3) * 2
             const x0 = (r0 * Math.cos(a)).toFixed(1)
             const y0 = (r0 * Math.sin(a)).toFixed(1)
-            const drift = 9 + (i % 4) * 3
+            const drift = 5 + (i % 4) * 1.6
             const dx = (Math.cos(a) * drift).toFixed(1)
-            const dy = (Math.sin(a) * drift - 5).toFixed(1) // embers rise
-            const size = (1.1 + (i % 3) * 0.5).toFixed(2)
-            const dur = (2.6 + (i % 5) * 0.55).toFixed(2)
-            const begin = (-((i * 0.7) % 4)).toFixed(2)
+            const dy = (Math.sin(a) * drift - 3.5).toFixed(1) // embers rise, gently
+            const size = (1 + (i % 3) * 0.45).toFixed(2)
+            const dur = (4.5 + (i % 5) * 0.9).toFixed(2)
+            const begin = (-((i * 1.1) % 6)).toFixed(2)
             s +=
               `<g><circle cx="${x0}" cy="${y0}" r="${size}" stroke="none" opacity="0">` +
-              `<animate attributeName="opacity" values="0;0.85;0" keyTimes="0;0.3;1" dur="${dur}s" begin="${begin}s" repeatCount="indefinite"/>` +
+              `<animate attributeName="opacity" values="0;0.55;0" keyTimes="0;0.4;1" dur="${dur}s" begin="${begin}s" repeatCount="indefinite"/>` +
               `</circle>` +
               `<animateTransform attributeName="transform" type="translate" from="0 0" to="${dx} ${dy}" dur="${dur}s" begin="${begin}s" repeatCount="indefinite"/></g>`
           }
@@ -425,6 +563,7 @@
       // shadow that reacts to how high he's bouncing ---
       const ground = document.querySelector('#ground')
       let headGroupEl = null
+      let chromeR = null
       let extrasRaf = null // the scene frame loop's rAF handle
       function renderLighting() {
         const svgEl = faceEl.querySelector('svg')
@@ -433,7 +572,21 @@
         if (!svgEl || !defs || !headGroupEl) return
         defs.insertAdjacentHTML(
           'beforeend',
-          '<radialGradient id="bwl-shade" cx="36%" cy="30%" r="88%">' +
+          '<pattern id="bwscan" patternUnits="userSpaceOnUse" width="4" height="3">' +
+            '<rect x="0" y="0" width="4" height="1.3" fill="#000"/></pattern>' +
+            '<clipPath id="bwx-headclip"><circle r="46"/></clipPath>' +
+            '<linearGradient id="bwx-chromebase" gradientUnits="userSpaceOnUse" x1="0" y1="-64" x2="0" y2="64">' +
+            '<stop offset="0" stop-color="#dceaf5"/>' +
+            '<stop offset="0.45" stop-color="#8fa3b2"/>' +
+            '<stop offset="1" stop-color="#39424c"/></linearGradient>' +
+            '<linearGradient id="bwx-holo" x1="0" y1="0" x2="1" y2="1">' +
+            '<stop offset="0" stop-color="#9be7ff" stop-opacity="0"/>' +
+            '<stop offset="0.3" stop-color="#9be7ff" stop-opacity="0.5"/>' +
+            '<stop offset="0.45" stop-color="#ffc7f2" stop-opacity="0.55"/>' +
+            '<stop offset="0.6" stop-color="#d9c8ff" stop-opacity="0.5"/>' +
+            '<stop offset="0.75" stop-color="#c2ffe5" stop-opacity="0.45"/>' +
+            '<stop offset="1" stop-color="#c2ffe5" stop-opacity="0"/></linearGradient>' +
+            '<radialGradient id="bwl-shade" cx="36%" cy="30%" r="88%">' +
             '<stop offset="0%" stop-color="#fff" stop-opacity="0.18"/>' +
             '<stop offset="45%" stop-color="#fff" stop-opacity="0"/>' +
             '<stop offset="80%" stop-color="#000" stop-opacity="0"/>' +
@@ -447,6 +600,55 @@
         shade.style.pointerEvents = 'none'
         // between the head disc and the features: shades the ball, not the eyes
         headGroupEl.insertBefore(shade, headGroupEl.children[2] || null)
+        // chrome: a skybox reflection on the ball, under the features. The
+        // rect parallaxes against the gaze so the environment stays put
+        // while the sphere turns inside it.
+        const cg = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+        cg.setAttribute('class', 'bwx-chromeg')
+        cg.setAttribute('clip-path', 'url(#bwx-headclip)')
+        cg.style.opacity = 'var(--fx-chrome-o, 0)'
+        cg.style.pointerEvents = 'none'
+        cg.innerHTML =
+          '<g class="bwx-chromeR">' +
+          '<rect x="-64" y="-64" width="128" height="128" fill="url(#bwx-chromebase)"/>' +
+          '<g style="filter: blur(4.5px)">' +
+          '<rect x="-75" y="-32" width="160" height="15" fill="#f4faff" opacity="0.5" transform="rotate(-18)">' +
+          '<animateTransform attributeName="transform" type="translate" values="0 0; 7 3; 0 0" dur="27s" repeatCount="indefinite" additive="sum"/>' +
+          '</rect>' +
+          '<rect x="-75" y="6" width="160" height="8" fill="#e2eff9" opacity="0.35" transform="rotate(-18)"/>' +
+          '<rect x="-75" y="24" width="160" height="20" fill="#10151a" opacity="0.35" transform="rotate(-13)">' +
+          '<animateTransform attributeName="transform" type="translate" values="0 0; -6 -2; 0 0" dur="34s" repeatCount="indefinite" additive="sum"/>' +
+          '</rect>' +
+          '<circle cx="-20" cy="-28" r="26" fill="#ffffff" opacity="0.22"/>' +
+          '</g>' +
+          '</g>'
+        headGroupEl.insertBefore(cg, shade) // reflection under the shading
+        chromeR = cg.querySelector('.bwx-chromeR')
+        // head-level fx: grain and holo wash OVER the features (screen-style),
+        // the neon rim hugging the silhouette on top
+        const hx = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+        hx.setAttribute('class', 'bwhx')
+        hx.style.pointerEvents = 'none'
+        hx.innerHTML =
+          '<g clip-path="url(#bwx-headclip)" style="opacity: var(--fx-holo-o, 0); filter: blur(2px)">' +
+          '<rect x="-70" y="-70" width="140" height="140" fill="url(#bwx-holo)">' +
+          '<animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="22s" repeatCount="indefinite"/>' +
+          '</rect></g>' +
+          '<g style="opacity: var(--fx-glass-o, 0)">' +
+          '<circle r="43.1" fill="none" stroke="#ff4d6d" stroke-width="1.3" opacity="0.4" style="filter: blur(0.9px); mix-blend-mode: screen"/>' +
+          '<circle r="43.5" fill="none" stroke="#7dffb0" stroke-width="1.3" opacity="0.4" style="filter: blur(0.9px); mix-blend-mode: screen"/>' +
+          '<circle r="43.9" fill="none" stroke="#55c8ff" stroke-width="1.3" opacity="0.4" style="filter: blur(0.9px); mix-blend-mode: screen"/>' +
+          '<circle r="39.5" fill="none" stroke="#000000" stroke-width="4.5" opacity="0.14" style="filter: blur(2.5px)"/>' +
+          '<g style="filter: blur(2px); mix-blend-mode: screen">' +
+          '<path d="M -30 32 A 44 44 0 0 0 12 42" fill="none" stroke="#ff5d7a" stroke-width="2.2" opacity="0.35" stroke-linecap="round"/>' +
+          '<path d="M 40 18 A 44 44 0 0 0 30 -32" fill="none" stroke="#66d9ff" stroke-width="2.2" opacity="0.35" stroke-linecap="round"/>' +
+          '<path d="M -12 -42 A 44 44 0 0 0 -42 -10" fill="none" stroke="#b58cff" stroke-width="2.2" opacity="0.3" stroke-linecap="round"/>' +
+          '<animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="42s" repeatCount="indefinite"/>' +
+          '</g>' +
+          '<path d="M -18 40 A 44 44 0 0 0 40 -18" fill="none" stroke="#ffffff" stroke-width="2.6" opacity="0.3" stroke-linecap="round" style="filter: blur(1.4px)"/>' +
+          '</g>' +
+          '<circle r="45" fill="none" stroke-width="2.4" style="stroke: var(--aura-color); opacity: var(--fx-rim-o, 0); filter: blur(0.6px)"/>'
+        headGroupEl.appendChild(hx)
       }
 
       const TR = /translate\((-?[\d.]+)[ ,](-?[\d.]+)\)/
@@ -492,8 +694,37 @@
             mLoS += (lo / total - mLoS) * 0.35
           }
         }
+        computeGaze()
         face?.talk?.(level)
         updateMouth(level)
+        // the chrome environment stays world-anchored as the head turns
+        if (chromeR && chromeR.isConnected)
+          chromeR.setAttribute(
+            'transform',
+            `translate(${(-gSinYaw * 7).toFixed(1)} ${(-gSinPitch * 5).toFixed(1)})`
+          )
+
+        // eye glow follows the lids: only as much ink as is actually showing
+        if ((+cfg.fxBloom || 0) > 0.01 || (+cfg.fxHalation || 0) > 0.01 || (+cfg.fxGlass || 0) > 0.01) {
+          for (const c of eyeCache) {
+            if (!c.el.isConnected) continue
+            let open = 1
+            const gt = c.el.getAttribute('transform') || ''
+            const scales = [...gt.matchAll(/scale\((-?[\d.]+)[ ,](-?[\d.]+)\)/g)]
+            if (scales.length) open = Math.max(0, Math.min(1, +scales[scales.length - 1][2]))
+            let lidCover = 0
+            for (let li = 0; li < c.lids.length; li++) {
+              const m2 = /translate\(0[ ,](-?[\d.]+)\)/.exec(c.lids[li].getAttribute('transform') || '')
+              if (!m2) continue
+              const y = +m2[1]
+              lidCover += li === 0 ? (y + 12) / 25 : (12 - y) / 25
+            }
+            const vis = Math.max(0, Math.min(1, Math.min(open, 1 - lidCover)))
+            c.el.style.filter = vis > 0.03 ? eyeGlowFilter(vis) : 'none'
+          }
+        } else {
+          for (const c of eyeCache) if (c.el.style.filter) c.el.style.filter = ''
+        }
 
       }
 

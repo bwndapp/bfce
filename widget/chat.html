@@ -318,6 +318,12 @@
     </div>
 
     <script type="module">
+      window.addEventListener('error', (e) =>
+        window.widget?.rlog?.(`${location.pathname.split('/').pop()}: ${e.message} @${e.lineno}`)
+      )
+      window.addEventListener('unhandledrejection', (e) =>
+        window.widget?.rlog?.(`${location.pathname.split('/').pop()} promise: ${e.reason}`)
+      )
       const log = document.querySelector('#log')
       const bar = document.querySelector('#bar')
       const row = document.querySelector('#row')

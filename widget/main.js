@@ -12,7 +12,8 @@ const ICON = path.join(__dirname, '..', 'docs', 'logo.png')
 // styling belongs to the incubator, so a cloned bot keeps its outfit
 const STYLE_KEYS = [
   'skin', 'ink', 'pupils', 'mood', 'voice', 'voicePitch', 'aura',
-  'voiceMode', 'elVoice',
+  'voiceMode', 'elVoice', 'fxBloom', 'fxHalation', 'fxScan',
+  'fxChrome', 'fxHolo', 'fxHue', 'fxRim', 'fxGlass',
 ]
 const STYLE_DEFAULTS = {
   skin: '#16181a',
@@ -24,6 +25,14 @@ const STYLE_DEFAULTS = {
   aura: 'none',
   voiceMode: 'babble', // 'babble' | 'el'
   elVoice: '', // ElevenLabs voice id, per incubator
+  fxBloom: 0, // post-processing intensities, 0..1
+  fxHalation: 0,
+  fxScan: 0,
+  fxChrome: 0,
+  fxHolo: 0,
+  fxHue: 0,
+  fxRim: 0,
+  fxGlass: 0,
 }
 const GLOBAL_DEFAULTS = {
   server: 'wss://bwnd.app/api/v1/incubators/public/bbots/ws',
@@ -682,6 +691,15 @@ ipcMain.handle('get-hello', () => ({
   user: bridge.user,
   incubators: bridge.incubators,
 }))
+// renderer crash reporter: uncaught errors land in userData/renderer-errors.log
+ipcMain.on('rlog', (_e, msg) => {
+  try {
+    fs.appendFileSync(
+      path.join(app.getPath('userData'), 'renderer-errors.log'),
+      `${new Date().toISOString()} ${msg}\n`
+    )
+  } catch {}
+})
 ipcMain.on('quit', (e) => {
   const inst = botOf(e)
   if (!inst || inst.primary) app.quit()

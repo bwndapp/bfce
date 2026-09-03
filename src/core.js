@@ -324,9 +324,11 @@ export function createFace(host, options = {}) {
     const gy = advance(gaze.y, dt)
     for (const key in shape) advance(shape[key], dt)
 
-    // Involuntary blinking, with the occasional double.
+    // Involuntary blinking, with the occasional double. Eyes that the
+    // expression already holds shut (sleep) don't blink — a closed lid
+    // twitching reads as a bad dream.
     if (opt.blink && !reduced && now > blinkAt) {
-      active.push({ def: REACTIONS.blink, t: 0 })
+      if (shape.lidT.to + shape.lidB.to < 0.9) active.push({ def: REACTIONS.blink, t: 0 })
       blinkAt = now + (Math.random() < 0.24 ? 240 : rand(2200, 6000))
     }
 

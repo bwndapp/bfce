@@ -48,5 +48,6 @@ contextBridge.exposeInMainWorld('widget', {
   onChatReply: (cb) => ipcRenderer.on('chat-reply', (_e, r) => cb(r)),
   onChatState: (cb) => ipcRenderer.on('chat-state', (_e, s) => cb(s)),
   onChatFocus: (cb) => ipcRenderer.on('chat-focus', () => cb()),
+  rlog: (m) => ipcRenderer.send('rlog', String(m).slice(0, 800)),
   quit: () => ipcRenderer.send('quit'),
 })
