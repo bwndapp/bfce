@@ -15,7 +15,7 @@ const ICON = path.join(__dirname, 'icon.png')
 const STYLE_KEYS = [
   'skin', 'ink', 'pupils', 'mood', 'voice', 'voicePitch', 'aura',
   'voiceMode', 'elVoice', 'fxBloom', 'fxHalation', 'fxScan',
-  'fxChrome', 'fxHolo', 'fxHue', 'fxRim', 'fxGlass', 'fxGloss',
+  'fxChrome', 'fxHolo', 'fxHue', 'fxRim', 'fxGlass', 'fxGloss', 'fxScratch',
 ]
 const STYLE_DEFAULTS = {
   skin: '#16181a',
@@ -36,6 +36,7 @@ const STYLE_DEFAULTS = {
   fxRim: 0,
   fxGlass: 0,
   fxGloss: 0,
+  fxScratch: 0,
 }
 const GLOBAL_DEFAULTS = {
   server: 'wss://bwnd.app/api/v1/incubators/public/bbots/ws',
@@ -123,6 +124,8 @@ const mergedCfg = (inst) => ({
   autoConnect: cfg.autoConnect,
   incubator: inst.incubator,
   presets: cfg.presets,
+  styleKeys: STYLE_KEYS, // so a saved look captures every style key, always
+  styleDefaults: STYLE_DEFAULTS,
   elKey: cfg.elKey,
   showFeed: cfg.showFeed,
 })
@@ -189,12 +192,27 @@ function spawnBot(incubator, { primary: isPrimary = false, x, y } = {}) {
   inst.win.loadFile('index.html')
   inst.win.on('move', () => {
     if (!inst.win.isDestroyed() && !inst.resizing && !inst.adjusting)
-      inst.win.webContents.send('dragging')
+      inst.win.webContents.send('dragging', screenPos(inst.win))
     positionChat(inst)
+  })
+  // the chrome reflection is anchored to the screen, so it needs to know
+  // where the window starts out
+  inst.win.webContents.on('did-finish-load', () => {
+    if (!inst.win.isDestroyed()) inst.win.webContents.send('dragging', { ...screenPos(inst.win), settle: true })
   })
   inst.win.on('closed', () => closeBot(inst))
   instances.set(inst.key, inst)
   return inst
+}
+
+// window centre as a fraction of its display's work area, -0.5..0.5
+function screenPos(w) {
+  const b = w.getBounds()
+  const a = screen.getDisplayMatching(b).workArea
+  return {
+    nx: (b.x + b.width / 2 - a.x) / a.width - 0.5,
+    ny: (b.y + b.height / 2 - a.y) / a.height - 0.5,
+  }
 }
 
 function closeBot(inst) {
@@ -207,8 +225,65 @@ function closeBot(inst) {
   if (!inst.primary) persistClones()
 }
 
+// Manual drag and resize run on their own fast loop, and the size eases
+// toward the cursor instead of snapping to it — the corner still tracks the
+// pointer, but through a short spring, so it glides rather than stutters.
+// The loop only runs while something is in motion or still settling.
+let motionTimer = null
+function motionTick() {
+  const p = screen.getCursorScreenPoint()
+  let busy = false
+  for (const inst of instances.values()) {
+    const w = inst.win
+    if (!w || w.isDestroyed()) continue
+    if (inst.resizing || inst.sizeCur != null) {
+      const b = w.getBounds()
+      // the centre is pinned for the whole gesture, so DPI rounding of the
+      // bounds can't walk it around
+      if (!inst.pin) inst.pin = { x: b.x + b.width / 2, y: b.y + b.height / 2 }
+      const { x: cx, y: cy } = inst.pin
+      if (inst.resizing)
+        inst.sizeTarget = Math.max(80, Math.min(800, 2 * Math.max(Math.abs(p.x - cx), Math.abs(p.y - cy))))
+      if (inst.sizeCur == null) inst.sizeCur = b.width
+      const t = inst.sizeTarget ?? inst.sizeCur
+      // ease: a third of the way each tick, snapping when close
+      inst.sizeCur += (t - inst.sizeCur) * (inst.resizing ? 0.32 : 0.28)
+      if (Math.abs(t - inst.sizeCur) < 0.4) inst.sizeCur = t
+      const size = Math.round(inst.sizeCur)
+      if (size !== b.width || size !== b.height) {
+        inst.adjusting = true // the 'move' events this fires aren't a drag
+        w.setBounds({ x: Math.round(cx - size / 2), y: Math.round(cy - size / 2), width: size, height: size })
+      }
+      if (!inst.resizing && inst.sizeCur === t) {
+        // settled: release the gesture state
+        inst.sizeCur = null
+        inst.sizeTarget = null
+        inst.pin = null
+        inst.adjusting = false
+        positionChat(inst)
+      } else busy = true
+    } else if (inst.moving) {
+      // full bounds with the size captured at drag start — setPosition alone
+      // lets DPI rounding drift the size a pixel per tick
+      const nx = Math.round(p.x - inst.moving.dx)
+      const ny = Math.round(p.y - inst.moving.dy)
+      const b = w.getBounds()
+      if (nx !== b.x || ny !== b.y)
+        w.setBounds({ x: nx, y: ny, width: inst.moving.w, height: inst.moving.h })
+      busy = true
+    }
+  }
+  if (!busy) {
+    clearInterval(motionTimer)
+    motionTimer = null
+  }
+}
+function wakeMotion() {
+  if (!motionTimer) motionTimer = setInterval(motionTick, 8)
+}
+
 // The renderers can't see the pointer once it leaves their windows, so global
-// gaze (and manual drag/resize) is driven from one shared poll.
+// gaze is driven from one shared poll.
 setInterval(() => {
   const p = screen.getCursorScreenPoint()
   for (const inst of instances.values()) {
@@ -217,28 +292,6 @@ setInterval(() => {
     const b = w.getBounds()
     const cx = b.x + b.width / 2
     const cy = b.y + b.height / 2
-    if (inst.resizing) {
-      // square sized so its corner tracks the cursor, centre kept put
-      const size = Math.max(
-        80,
-        Math.min(800, Math.round(2 * Math.max(Math.abs(p.x - cx), Math.abs(p.y - cy))))
-      )
-      w.setBounds({
-        x: Math.round(cx - size / 2),
-        y: Math.round(cy - size / 2),
-        width: size,
-        height: size,
-      })
-    } else if (inst.moving) {
-      // full bounds with the size captured at drag start — setPosition alone
-      // lets DPI rounding drift the size a pixel per tick
-      w.setBounds({
-        x: Math.round(p.x - inst.moving.dx),
-        y: Math.round(p.y - inst.moving.dy),
-        width: inst.moving.w,
-        height: inst.moving.h,
-      })
-    }
     const kx = p.x - cx
     const ky = p.y - cy
     inst.curTick = (inst.curTick || 0) + 1
@@ -537,14 +590,23 @@ ipcMain.on('set-size', (e, size) => {
     height: s,
   })
 })
-ipcMain.on('resize-start', (e) => (botOf(e).resizing = true))
-ipcMain.on('resize-end', (e) => (botOf(e).resizing = false))
+ipcMain.on('resize-start', (e) => {
+  const inst = botOf(e)
+  if (!inst) return
+  inst.resizing = true
+  wakeMotion()
+})
+ipcMain.on('resize-end', (e) => {
+  const inst = botOf(e)
+  if (inst) inst.resizing = false // the loop keeps running until the size settles
+})
 ipcMain.on('move-start', (e) => {
   const inst = botOf(e)
   if (!inst?.win || inst.win.isDestroyed()) return
   const p = screen.getCursorScreenPoint()
   const b = inst.win.getBounds()
   inst.moving = { dx: p.x - b.x, dy: p.y - b.y, w: b.width, h: b.height }
+  wakeMotion()
 })
 ipcMain.on('move-end', (e) => (botOf(e).moving = null))
 ipcMain.on('toggle-settings', (e) => toggleSettings(botOf(e)))

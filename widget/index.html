@@ -21,7 +21,9 @@
          clipping at the window edge. */
       #face {
         position: absolute;
-        inset: 10%;
+        /* 15% each side leaves room past the head for the float, the aura
+           and the neon bloom, which reaches ~24 viewBox units beyond the rim */
+        inset: 15%;
         z-index: 1;
         /* clickable (click = chat, press-and-move = drag), so no OS drag region */
         -webkit-app-region: no-drag;
@@ -78,6 +80,10 @@
       #face .bwm {
         filter: var(--fx-eyes, none);
       }
+      /* fx layers ease into their slider values rather than snapping */
+      #face svg [style*='var(--fx-'] {
+        transition: opacity 260ms cubic-bezier(0.2, 0, 0, 1);
+      }
       /* fx: eye gloss — anime catchlights riding the eyeballs */
       .bwf-eyegloss {
         opacity: var(--fx-gloss-o, 0);
@@ -93,9 +99,9 @@
       #ground {
         position: absolute;
         left: 50%;
-        bottom: 1.5%;
-        width: 66%;
-        height: 8%;
+        bottom: 11%;
+        width: 56%;
+        height: 7%;
         transform: translateX(-50%);
         background: radial-gradient(
           closest-side,
@@ -374,10 +380,29 @@
         faceEl.style.setProperty('--fx-eyes', f.join(' ') || 'none')
         faceEl.style.setProperty('--fx-scan-o', ((+cfg.fxScan || 0) * 0.6).toFixed(2))
         faceEl.style.setProperty('--fx-gloss-o', ((+cfg.fxGloss || 0) * 0.9).toFixed(2))
-        faceEl.style.setProperty('--fx-chrome-o', ((+cfg.fxChrome || 0) * 0.9 * (1 - glass * 0.75)).toFixed(2))
+        // chrome under glass: metal shows the whole room, glass only the
+        // lights. As glass rises the reflection's alpha follows its luminance,
+        // so the dark ceiling and floor melt away and the strips stay
+        faceEl.style.setProperty('--fx-chrome-o', ((+cfg.fxChrome || 0) * 0.9 * (1 - glass * 0.3)).toFixed(2))
+        const cgEl = faceEl.querySelector('.bwx-chromeg')
+        const cgm = faceEl.querySelector('#bwx-chromeglassm')
+        if (cgEl && cgm) {
+          if (glass > 0.01) {
+            const k = (1 + glass * 0.5).toFixed(3) // the lights gain as the body thins
+            const g = glass
+            cgm.setAttribute(
+              'values',
+              `${k} 0 0 0 0  0 ${k} 0 0 0  0 0 ${k} 0 0  ${(g * 0.3).toFixed(3)} ${(g * 0.59).toFixed(3)} ${(g * 0.11).toFixed(3)} ${(1 - g).toFixed(3)} 0`
+            )
+            cgEl.setAttribute('filter', 'url(#bwx-chromeglass)')
+          } else cgEl.removeAttribute('filter')
+        }
         faceEl.style.setProperty('--fx-glass-o', (glass * 0.9).toFixed(2))
         faceEl.style.setProperty('--fx-holo-o', ((+cfg.fxHolo || 0) * 0.22).toFixed(2))
-        faceEl.style.setProperty('--fx-rim-o', ((+cfg.fxRim || 0) * 0.85).toFixed(2))
+        faceEl.style.setProperty('--fx-scratch-o', ((+cfg.fxScratch || 0) * 0.9).toFixed(2))
+        const rim = +cfg.fxRim || 0
+        faceEl.style.setProperty('--fx-rim-o', Math.min(1, rim * 1.15).toFixed(2)) // the tube lights fast
+        faceEl.style.setProperty('--fx-rim-b', (rim * rim * 0.95).toFixed(2)) // the bloom swells after
         faceEl.style.setProperty('--fx-alpha', (1 - (+cfg.fxGlass || 0) * 0.92).toFixed(2))
         const hue = +cfg.fxHue || 0
         faceEl.classList.toggle('huedrift', hue > 0.01)
@@ -579,7 +604,152 @@
       const ground = document.querySelector('#ground')
       let headGroupEl = null
       let chromeR = null
+      let scratchR = null
+      let lastScratchKey = ''
       let extrasRaf = null // the scene frame loop's rAF handle
+      // r/g encode an outward push growing with radius²: the mirror-ball
+      // magnification that squeezes most of the room into the last few px
+      let chromeWarpCache = ''
+      function chromeWarpMap() {
+        if (chromeWarpCache) return chromeWarpCache
+        const N = 128
+        const c = document.createElement('canvas')
+        c.width = c.height = N
+        const ctx = c.getContext('2d')
+        const img = ctx.createImageData(N, N)
+        const d = img.data
+        const K = 0.42 // rim magnification
+        const S = 64 // must match feDisplacementMap scale
+        for (let j = 0; j < N; j++) {
+          for (let i = 0; i < N; i++) {
+            const x = i - 64 + 0.5
+            const y = j - 64 + 0.5
+            const r = Math.min(1, Math.hypot(x, y) / 46)
+            const k = K * r * r
+            const o = (j * N + i) * 4
+            d[o] = Math.round(255 * Math.min(1, Math.max(0, 0.5 + (x * k) / S)))
+            d[o + 1] = Math.round(255 * Math.min(1, Math.max(0, 0.5 + (y * k) / S)))
+            d[o + 2] = 0
+            d[o + 3] = 255
+          }
+        }
+        ctx.putImageData(img, 0, 0)
+        chromeWarpCache = c.toDataURL('image/png')
+        return chromeWarpCache
+      }
+      // clearcoat scratches: hairline swirl marks — short arcs around random
+      // centres, the way a buffer leaves them — lit by the key light so they
+      // flare near the specular and all but vanish in the shade
+      function scratchLayer() {
+        // each bot wears its own pattern: the seed is a hash of its
+        // incubator id, so the wear is stable across runs and machines
+        let seed = 1337
+        for (const ch of cfg.incubator || '') seed = (Math.imul(seed ^ ch.charCodeAt(0), 16777619) >>> 0) || 1
+        const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296)
+        const LX = -15 // the key light, where the specular sits
+        const LY = -19
+        const light = []
+        const dark = []
+        // a groove only flares where it runs across the light direction; a
+        // groove pointing at the light is invisible. That anisotropy is what
+        // makes them read as scratches in a coat rather than lines on a ball
+        const mark = (x0, y0, x1, y1, w, r) => {
+          const mx = (x0 + x1) / 2
+          const my = (y0 + y1) / 2
+          const tx = x1 - x0
+          const ty = y1 - y0
+          const tl = Math.hypot(tx, ty) || 1
+          const lx = LX - mx
+          const ly = LY - my
+          const ll = Math.hypot(lx, ly) || 1
+          const cross = Math.abs((tx * ly - ty * lx) / (tl * ll)) // 1 = across the light
+          const fall = Math.max(0.12, 1 - ll / 95) // and it dims away from the light
+          const a = Math.pow(cross, 2.6) * fall
+          if (a < 0.03) return
+          const d = r
+            ? `M ${x0.toFixed(1)} ${y0.toFixed(1)} A ${r.toFixed(0)} ${r.toFixed(0)} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`
+            : `M ${x0.toFixed(1)} ${y0.toFixed(1)} L ${x1.toFixed(1)} ${y1.toFixed(1)}`
+          light.push(`<path d="${d}" stroke-width="${w.toFixed(2)}" opacity="${a.toFixed(2)}"/>`)
+          if (a > 0.25) dark.push(`<path d="${d}" stroke-width="${w.toFixed(2)}" opacity="${(a * 0.5).toFixed(2)}" transform="translate(0.3 0.3)"/>`)
+        }
+        // an organic mark: a hairline that wanders a little, tapers at the
+        // ends, and sometimes skips. Drawn as a chain of short pieces whose
+        // width and opacity swell in the middle
+        const wander = (x0, y0, ang, len, w, curve, gap) => {
+          const n = Math.max(2, Math.round(len / 2.2))
+          let x = x0
+          let y = y0
+          let a = ang
+          for (let k = 0; k < n; k++) {
+            const t = (k + 0.5) / n
+            const env = Math.sin(t * Math.PI) // 0 at the ends, 1 mid-way
+            const seg = len / n
+            a += curve + (rnd() - 0.5) * 0.12
+            const nx = x + Math.cos(a) * seg
+            const ny = y + Math.sin(a) * seg
+            if (!(gap && rnd() < 0.18)) mark(x, y, nx, ny, w * (0.35 + env * 0.65), 0)
+            x = nx
+            y = ny
+          }
+        }
+        // the coat wears in patches: a few well-worked spots, thinning out
+        // between them, rather than an even spray
+        const patches = []
+        for (let c = 0; c < 5; c++) patches.push([(rnd() - 0.5) * 70, (rnd() - 0.5) * 70, 10 + rnd() * 16])
+        const spot = () => {
+          const [px, py, pr] = patches[Math.floor(rnd() * patches.length)]
+          // triangular falloff around the patch centre
+          const r = pr * (rnd() + rnd() - 1) * 1.4
+          const a = rnd() * Math.PI * 2
+          return [px + Math.cos(a) * r, py + Math.sin(a) * r]
+        }
+        // swirl marks: buffer arcs, each patch with its own centre of rotation
+        const centres = patches.map(([x, y]) => [x + (rnd() - 0.5) * 40, y + (rnd() - 0.5) * 40])
+        for (let i = 0; i < 620; i++) {
+          const [px, py] = rnd() < 0.8 ? spot() : [(rnd() - 0.5) * 96, (rnd() - 0.5) * 96]
+          if (Math.hypot(px, py) > 49) continue
+          const [cx, cy] = centres[i % centres.length]
+          const r = Math.hypot(px - cx, py - cy)
+          if (r < 5) continue
+          const ang = Math.atan2(py - cy, px - cx) + Math.PI / 2 // along the circle
+          const len = 1.5 + rnd() * rnd() * 11
+          wander(px, py, ang, len, 0.1 + rnd() * 0.18, len / r / Math.max(2, len / 2.2), rnd() < 0.3)
+        }
+        // straight nicks and a couple of proper gouges: deeper, longer, a
+        // little bent, with the odd skip where the grit lifted
+        for (let i = 0; i < 46; i++) {
+          const [px, py] = rnd() < 0.6 ? spot() : [(rnd() - 0.5) * 90, (rnd() - 0.5) * 90]
+          if (Math.hypot(px, py) > 46) continue
+          const gouge = rnd() < 0.15
+          const len = gouge ? 14 + rnd() * 24 : 3 + rnd() * rnd() * 16
+          wander(px, py, rnd() * Math.PI * 2, len, gouge ? 0.36 + rnd() * 0.3 : 0.16 + rnd() * 0.2, (rnd() - 0.5) * 0.05, true)
+        }
+        // pitting: grit that bit in and stopped
+        const pits = []
+        for (let i = 0; i < 70; i++) {
+          const [px, py] = rnd() < 0.7 ? spot() : [(rnd() - 0.5) * 92, (rnd() - 0.5) * 92]
+          if (Math.hypot(px, py) > 47) continue
+          const fall = Math.max(0.1, 1 - Math.hypot(LX - px, LY - py) / 95)
+          const rr = (0.12 + rnd() * 0.3).toFixed(2)
+          pits.push(`<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${rr}" fill="#fff" opacity="${(fall * 0.7).toFixed(2)}"/>`)
+          pits.push(`<circle cx="${(px + 0.25).toFixed(1)}" cy="${(py + 0.25).toFixed(1)}" r="${rr}" fill="#000" opacity="${(fall * 0.45).toFixed(2)}"/>`)
+        }
+        // wrapped in the sphere warp so the marks bunch up at the rim; the
+        // inner group turns with the head, since they're on its surface
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+        g.setAttribute('class', 'bwx-scratch')
+        g.setAttribute('clip-path', 'url(#bwx-headclip)')
+        g.setAttribute('filter', 'url(#bwx-chromewarp)')
+        g.style.opacity = 'var(--fx-scratch-o, 0)'
+        g.style.pointerEvents = 'none'
+        g.innerHTML =
+          '<g class="bwx-scratchR" fill="none" stroke-linecap="round">' +
+          `<g stroke="#000" opacity="0.6">${dark.join('')}</g>` +
+          `<g stroke="#fff">${light.join('')}</g>` +
+          `<g stroke="none">${pits.join('')}</g>` +
+          '</g>'
+        return g
+      }
       function renderLighting() {
         const svgEl = faceEl.querySelector('svg')
         const defs = svgEl?.querySelector('defs')
@@ -593,10 +763,56 @@
             '<radialGradient id="bwx-glossg"><stop offset="0" stop-color="#fff" stop-opacity="1"/>' +
             '<stop offset="0.55" stop-color="#fff" stop-opacity="0.55"/>' +
             '<stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>' +
-            '<linearGradient id="bwx-chromebase" gradientUnits="userSpaceOnUse" x1="0" y1="-64" x2="0" y2="64">' +
-            '<stop offset="0" stop-color="#dceaf5"/>' +
-            '<stop offset="0.45" stop-color="#8fa3b2"/>' +
-            '<stop offset="1" stop-color="#39424c"/></linearGradient>' +
+            // chrome: a mirror-ball environment — bright sky falling to a hard
+            // horizon, dark ground warming back up toward the bottom, then a
+            // fresnel rim, a tight specular and a soft ground bounce
+            // the studio: a dark ceiling, a mid-grey cyc wall, a dark floor
+            '<linearGradient id="bwx-chromesky" gradientUnits="userSpaceOnUse" x1="0" y1="-64" x2="0" y2="4">' +
+            '<stop offset="0" stop-color="#2c333a"/>' +
+            '<stop offset="0.28" stop-color="#6f7a85"/>' +
+            '<stop offset="0.7" stop-color="#c4ced7"/>' +
+            '<stop offset="1" stop-color="#96a2ad"/></linearGradient>' +
+            '<linearGradient id="bwx-chromeground" gradientUnits="userSpaceOnUse" x1="0" y1="-4" x2="0" y2="64">' +
+            '<stop offset="0" stop-color="#171c21"/>' +
+            '<stop offset="0.3" stop-color="#262d34"/>' +
+            '<stop offset="1" stop-color="#4c565f"/></linearGradient>' +
+            // the key softbox: white-hot centre falling off to a warm-grey diffuser edge
+            '<radialGradient id="bwx-sbkey" gradientUnits="userSpaceOnUse" cx="-22" cy="-33" r="24">' +
+            '<stop offset="0" stop-color="#ffffff"/>' +
+            '<stop offset="0.5" stop-color="#f4f2ee"/>' +
+            '<stop offset="1" stop-color="#c9c6c0"/></radialGradient>' +
+            // the strip light: a long tube that fades out at both ends
+            '<linearGradient id="bwx-sbstrip" x1="0" y1="0" x2="1" y2="0">' +
+            '<stop offset="0" stop-color="#fff" stop-opacity="0"/>' +
+            '<stop offset="0.18" stop-color="#fff" stop-opacity="0.85"/>' +
+            '<stop offset="0.82" stop-color="#fff" stop-opacity="0.85"/>' +
+            '<stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>' +
+            // the fill panel: cooler, softer
+            '<radialGradient id="bwx-sbfill" gradientUnits="userSpaceOnUse" cx="27" cy="-24" r="16">' +
+            '<stop offset="0" stop-color="#eef5fb"/>' +
+            '<stop offset="1" stop-color="#a9b8c6"/></radialGradient>' +
+            '<radialGradient id="bwx-chromevig" gradientUnits="userSpaceOnUse" cx="0" cy="-6" r="70">' +
+            '<stop offset="0.5" stop-color="#000" stop-opacity="0"/>' +
+            '<stop offset="1" stop-color="#000" stop-opacity="0.45"/></radialGradient>' +
+            // the sphere warp: a displacement map that magnifies the environment
+            // outward with the square of the radius, so it piles up at the rim
+            '<filter id="bwx-chromewarp" filterUnits="userSpaceOnUse" x="-64" y="-64" width="128" height="128" color-interpolation-filters="sRGB">' +
+            '<feImage href="' + chromeWarpMap() + '" x="-64" y="-64" width="128" height="128" preserveAspectRatio="none" result="m"/>' +
+            '<feDisplacementMap in="SourceGraphic" in2="m" scale="64" xChannelSelector="R" yChannelSelector="G"/>' +
+            '</filter>' +
+            '<filter id="bwx-chromeglass" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">' +
+            '<feColorMatrix id="bwx-chromeglassm" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0"/></filter>' +
+            '<radialGradient id="bwx-chromefres" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="46">' +
+            '<stop offset="0.6" stop-color="#05080b" stop-opacity="0"/>' +
+            '<stop offset="0.88" stop-color="#05080b" stop-opacity="0.22"/>' +
+            '<stop offset="1" stop-color="#05080b" stop-opacity="0.55"/></radialGradient>' +
+            '<radialGradient id="bwx-chromespec" gradientUnits="userSpaceOnUse" cx="-15" cy="-19" r="20">' +
+            '<stop offset="0" stop-color="#fff" stop-opacity="0.95"/>' +
+            '<stop offset="0.28" stop-color="#fff" stop-opacity="0.5"/>' +
+            '<stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>' +
+            '<radialGradient id="bwx-chromebounce" gradientUnits="userSpaceOnUse" cx="6" cy="36" r="30">' +
+            '<stop offset="0" stop-color="#c9d4de" stop-opacity="0.28"/>' +
+            '<stop offset="1" stop-color="#c9d4de" stop-opacity="0"/></radialGradient>' +
             '<linearGradient id="bwx-holo" x1="0" y1="0" x2="1" y2="1">' +
             '<stop offset="0" stop-color="#9be7ff" stop-opacity="0"/>' +
             '<stop offset="0.3" stop-color="#9be7ff" stop-opacity="0.5"/>' +
@@ -604,6 +820,9 @@
             '<stop offset="0.6" stop-color="#d9c8ff" stop-opacity="0.5"/>' +
             '<stop offset="0.75" stop-color="#c2ffe5" stop-opacity="0.45"/>' +
             '<stop offset="1" stop-color="#c2ffe5" stop-opacity="0"/></linearGradient>' +
+            '<filter id="bwx-rimblur1" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="1"/></filter>' +
+            '<filter id="bwx-rimblur3" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="2.6"/></filter>' +
+            '<filter id="bwx-rimblur7" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="6.5"/></filter>' +
             '<radialGradient id="bwl-shade" cx="36%" cy="30%" r="88%">' +
             '<stop offset="0%" stop-color="#fff" stop-opacity="0.18"/>' +
             '<stop offset="45%" stop-color="#fff" stop-opacity="0"/>' +
@@ -627,21 +846,42 @@
         cg.style.opacity = 'var(--fx-chrome-o, 0)'
         cg.style.pointerEvents = 'none'
         cg.innerHTML =
-          '<g class="bwx-chromeR">' +
-          '<rect x="-64" y="-64" width="128" height="128" fill="url(#bwx-chromebase)"/>' +
-          '<g>' +
-          '<rect x="-75" y="-34" width="160" height="19" rx="9" fill="#f4faff" opacity="0.32" transform="rotate(-18)">' +
-          '<animateTransform attributeName="transform" type="translate" values="0 0; 7 3; 0 0" dur="27s" repeatCount="indefinite" additive="sum"/>' +
-          '</rect>' +
-          '<rect x="-75" y="4" width="160" height="12" rx="6" fill="#e2eff9" opacity="0.22" transform="rotate(-18)"/>' +
-          '<rect x="-75" y="22" width="160" height="24" rx="12" fill="#10151a" opacity="0.24" transform="rotate(-13)">' +
-          '<animateTransform attributeName="transform" type="translate" values="0 0; -6 -2; 0 0" dur="34s" repeatCount="indefinite" additive="sum"/>' +
-          '</rect>' +
-          '<circle cx="-20" cy="-28" r="26" fill="#ffffff" opacity="0.22"/>' +
+          '<g filter="url(#bwx-chromewarp)"><g class="bwx-chromeR">' +
+          '<g>' + // a slow sway of the environment, like the room breathing
+          '<animateTransform attributeName="transform" type="rotate" values="-1.6 0 0; 1.6 0 0; -1.6 0 0" dur="46s" repeatCount="indefinite"/>' +
+          '<rect x="-80" y="-80" width="160" height="160" fill="url(#bwx-chromesky)"/>' +
+          // the horizon bows: seen from above, the reflected ground curls up at the edges
+          '<path d="M -80 80 L -80 6 Q 0 -8 80 6 L 80 80 Z" fill="url(#bwx-chromeground)"/>' +
+          '<path d="M -80 6 Q 0 -8 80 6" fill="none" stroke="#e8eff5" stroke-width="1.4" opacity="0.28" filter="url(#bwx-rimblur1)"/>' +
+          // the studio, as seen in the metal: a big overhead scrim, two long
+          // strip lights, a cooler fill panel, each pooled again in the floor.
+          // No frames, no bars — soft edges everywhere, like real diffusion
+          '<g fill="none">' +
+          '<path d="M -46 -50 L 0 -46 L -2 -22 L -44 -20 Z" fill="#fff" opacity="0.4" filter="url(#bwx-rimblur7)"/>' + // scrim spill
+          '<path d="M -44 -48 L -2 -44 L -4 -24 L -42 -22 Z" fill="url(#bwx-sbkey)" opacity="0.94" filter="url(#bwx-rimblur1)"/>' + // scrim
+          '<rect x="-62" y="-57" width="124" height="3.2" rx="1.6" fill="url(#bwx-sbstrip)" opacity="0.5" filter="url(#bwx-rimblur3)"/>' + // top strip bloom
+          '<rect x="-62" y="-57" width="124" height="3.2" rx="1.6" fill="url(#bwx-sbstrip)"/>' +
+          '<rect x="-10" y="-13" width="70" height="2" rx="1" fill="url(#bwx-sbstrip)" opacity="0.4" filter="url(#bwx-rimblur3)" transform="rotate(-6)"/>' + // low strip bloom
+          '<rect x="-10" y="-13" width="70" height="2" rx="1" fill="url(#bwx-sbstrip)" opacity="0.8" transform="rotate(-6)"/>' +
+          '<path d="M 14 -38 L 40 -34 L 39 -16 L 15 -14 Z" fill="#fff" opacity="0.24" filter="url(#bwx-rimblur7)"/>' + // fill spill
+          '<path d="M 15 -37 L 39 -33 L 38 -17 L 16 -15 Z" fill="url(#bwx-sbfill)" opacity="0.6" filter="url(#bwx-rimblur1)"/>' +
+          '<ellipse cx="-24" cy="26" rx="22" ry="7" fill="#e6ebef" opacity="0.26" filter="url(#bwx-rimblur7)"/>' + // scrim in the floor
+          '<ellipse cx="27" cy="20" rx="13" ry="4.5" fill="#dbe6f0" opacity="0.16" filter="url(#bwx-rimblur7)"/>' + // fill in the floor
+          '<path d="M -80 12 Q 0 4 80 12" stroke="#98a3ae" stroke-width="2" opacity="0.22" filter="url(#bwx-rimblur3)"/>' + // cyc curve
+          '<rect x="-80" y="-80" width="160" height="160" fill="url(#bwx-chromevig)"/>' +
           '</g>' +
-          '</g>'
+          '<rect x="-80" y="-80" width="160" height="160" fill="url(#bwx-chromebounce)"/>' +
+          '</g>' +
+          '</g></g>' +
+          // the sphere's own shading is not part of the environment: it stays put
+          '<circle r="46" fill="url(#bwx-chromefres)"/>' +
+          '<circle r="46" fill="url(#bwx-chromespec)"/>'
         headGroupEl.insertBefore(cg, shade) // reflection under the shading
         chromeR = cg.querySelector('.bwx-chromeR')
+        // the clearcoat sits on top of the shaded ball, under the features
+        const sc = scratchLayer()
+        headGroupEl.insertBefore(sc, shade.nextSibling)
+        scratchR = sc.querySelector('.bwx-scratchR')
         // head-level fx: grain and holo wash OVER the features (screen-style),
         // the neon rim hugging the silhouette on top
         const hx = document.createElementNS('http://www.w3.org/2000/svg', 'g')
@@ -665,8 +905,69 @@
           '</g>' +
           '<path d="M -18 40 A 44 44 0 0 0 40 -18" fill="none" stroke="#ffffff" stroke-width="3.6" opacity="0.2" stroke-linecap="round"/>' +
           '</g>' +
-          '<circle r="45" fill="none" stroke-width="3" style="stroke: var(--aura-color); opacity: var(--fx-rim-o, 0)"/>'
+          // neon rim: a real tube — wide soft bloom, tight bloom, the coloured
+          // glass, a white-hot core, and a slow hot-spot orbiting the tube
+          '<g style="stroke: var(--aura-color)" fill="none" stroke-linecap="round">' +
+          '<g style="opacity: var(--fx-rim-b, 0)">' +
+          '<circle r="46" stroke-width="9" opacity="0.55" filter="url(#bwx-rimblur7)"/>' +
+          '<circle r="45.5" stroke-width="5" opacity="0.8" filter="url(#bwx-rimblur3)">' +
+          '<animate attributeName="opacity" values="0.8;0.72;0.8;0.8;0.66;0.8;0.78;0.8" dur="7.3s" repeatCount="indefinite"/>' +
+          '</circle>' +
+          '</g>' +
+          '<g style="opacity: var(--fx-rim-o, 0)">' +
+          '<circle r="45.5" stroke-width="2.4" opacity="0.95"/>' +
+          '<circle r="45.5" stroke-width="0.9" stroke="#fff" opacity="0.9"/>' +
+          '<circle r="45.5" stroke-width="1.6" stroke="#fff" opacity="0.7" stroke-dasharray="26 260" filter="url(#bwx-rimblur1)">' +
+          '<animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="9s" repeatCount="indefinite"/>' +
+          '</circle>' +
+          '</g>' +
+          '</g>'
         headGroupEl.appendChild(hx)
+        applyFx() // the chrome/glass matrix lives in the layer we just built
+      }
+
+      // --- the room stays put while he's carried across it: the reflection
+      // is anchored to the screen and slides the other way as he moves,
+      // with a bit of overshoot and swing so a drag feels like real motion ---
+      let envX = 0
+      let envY = 0
+      let envTX = 0
+      let envTY = 0
+      let envVX = 0
+      let envVY = 0
+      let envRot = 0
+      let envRotV = 0
+      let envLast = null
+      function envMove({ nx, ny, settle }) {
+        envTX = -nx * 18
+        envTY = -ny * 12
+        if (settle) {
+          envX = envTX
+          envY = envTY
+          envLast = { nx, ny }
+          return
+        }
+        if (envLast) {
+          // a kick against the direction of travel, and a swing with it
+          const dx = nx - envLast.nx
+          const dy = ny - envLast.ny
+          envVX -= dx * 160
+          envVY -= dy * 110
+          envRotV += dx * 120
+        }
+        envLast = { nx, ny }
+        if (!extrasRaf) extrasRaf = requestAnimationFrame(extrasFrame)
+      }
+      function envStep() {
+        envVX += (envTX - envX) * 0.08
+        envVY += (envTY - envY) * 0.08
+        envVX *= 0.86
+        envVY *= 0.86
+        envX = Math.max(-24, Math.min(24, envX + envVX))
+        envY = Math.max(-18, Math.min(18, envY + envVY))
+        envRotV += -envRot * 0.07
+        envRotV *= 0.85
+        envRot = Math.max(-9, Math.min(9, envRot + envRotV))
       }
 
       const TR = /translate\((-?[\d.]+)[ ,](-?[\d.]+)\)/
@@ -693,7 +994,7 @@
         const gKey = `${htx.toFixed(1)}|${lift.toFixed(1)}`
         if (gKey !== lastGroundKey) {
           lastGroundKey = gKey
-          ground.style.transform = `translateX(calc(-50% + ${(htx * 0.6).toFixed(1)}vmin)) scaleX(${Math.max(0.55, 1 - lift / 55).toFixed(3)})`
+          ground.style.transform = `translateX(calc(-50% + ${(htx * 0.5).toFixed(1)}vmin)) scaleX(${Math.max(0.55, 1 - lift / 55).toFixed(3)})`
           ground.style.opacity = Math.max(0.25, 1 - lift / 30).toFixed(2)
         }
 
@@ -730,10 +1031,19 @@
         updateMouth(level)
         // the chrome environment stays world-anchored as the head turns
         if (chromeR && chromeR.isConnected) {
-          const cKey = `${(-gSinYaw * 7).toFixed(1)} ${(-gSinPitch * 5).toFixed(1)}`
+          envStep()
+          const cKey = `translate(${(-gSinYaw * 7 + envX).toFixed(1)} ${(-gSinPitch * 5 + envY).toFixed(1)}) rotate(${envRot.toFixed(1)})`
           if (cKey !== lastChromeKey) {
             lastChromeKey = cKey
-            chromeR.setAttribute('transform', `translate(${cKey})`)
+            chromeR.setAttribute('transform', cKey)
+          }
+        }
+        // the clearcoat is the surface: it turns with the head
+        if (scratchR && scratchR.isConnected) {
+          const sKey = `${(gSinYaw * 6).toFixed(1)} ${(gSinPitch * 4).toFixed(1)}`
+          if (sKey !== lastScratchKey) {
+            lastScratchKey = sKey
+            scratchR.setAttribute('transform', `translate(${sKey})`)
           }
         }
         // catchlights are speculars: fixed to the light, so they slide
@@ -1234,7 +1544,9 @@
       // --- being dragged around ---
       let dragging = false
       let dropTimer
-      window.widget.onDragging(() => {
+      window.widget.onDragging((pos) => {
+        if (pos) envMove(pos)
+        if (pos?.settle) return // just the opening position, not a drag
         if (!dragging) {
           dragging = true
           face.setExpression('scared')

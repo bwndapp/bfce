@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld('widget', {
   react: (name) => ipcRenderer.send('react', name),
   onReact: (cb) => ipcRenderer.on('react', (_e, n) => cb(n)),
   onCursor: (cb) => ipcRenderer.on('cursor', (_e, p) => cb(p)),
-  onDragging: (cb) => ipcRenderer.on('dragging', () => cb()),
+  onDragging: (cb) => ipcRenderer.on('dragging', (_e, p) => cb(p)),
   resizeStart: () => ipcRenderer.send('resize-start'),
   resizeEnd: () => ipcRenderer.send('resize-end'),
   moveStart: () => ipcRenderer.send('move-start'),

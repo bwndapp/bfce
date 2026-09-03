@@ -5,13 +5,19 @@
     <title>bbot settings</title>
     <style>
       :root {
-        --bg: rgba(14, 16, 19, 0.97);
-        --line: rgba(255, 255, 255, 0.08);
-        --text: #d7dbdf;
-        --dim: #878e95;
-        --chip: rgba(255, 255, 255, 0.05);
-        --chip-hover: rgba(255, 255, 255, 0.11);
+        --bg: rgba(15, 17, 20, 0.9);
+        --line: rgba(255, 255, 255, 0.07);
+        --line-strong: rgba(255, 255, 255, 0.12);
+        --panel: rgba(255, 255, 255, 0.028);
+        --text: #dfe3e7;
+        --dim: #8a9199;
+        --chip: rgba(255, 255, 255, 0.055);
+        --chip-hover: rgba(255, 255, 255, 0.1);
         --accent: #8ab4ff;
+        --accent-soft: rgba(138, 180, 255, 0.13);
+        --accent-ring: rgba(138, 180, 255, 0.35);
+        --ease: cubic-bezier(0.2, 0, 0, 1);
+        --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
       }
       html,
       body {
@@ -27,29 +33,35 @@
         display: flex;
         flex-direction: column;
         background: var(--bg);
-        border: 1px solid var(--line);
-        border-radius: 16px;
+        backdrop-filter: blur(22px) saturate(1.2);
+        -webkit-backdrop-filter: blur(22px) saturate(1.2);
+        border: 1px solid var(--line-strong);
+        border-radius: 18px;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.06),
+          0 20px 50px rgba(0, 0, 0, 0.45);
         color: var(--text);
-        font: 12px/1.4 system-ui, sans-serif;
+        font: 12px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif;
         overflow: hidden;
       }
       header {
         display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 12px 14px;
+        gap: 9px;
+        padding: 11px 12px 11px 15px;
         border-bottom: 1px solid var(--line);
         -webkit-app-region: drag;
         flex: none;
       }
       header .dot {
-        width: 22px;
-        height: 22px;
+        width: 24px;
+        height: 24px;
         flex: none;
       }
       header h1 {
         font-size: 13px;
         font-weight: 600;
+        letter-spacing: 0.01em;
         margin: 0;
         flex: 1;
       }
@@ -58,14 +70,20 @@
         border: none;
         background: none;
         color: var(--dim);
-        font-size: 13px;
+        font-size: 12px;
+        line-height: 1;
+        width: 26px;
+        height: 26px;
         cursor: pointer;
-        padding: 2px 6px;
-        border-radius: 6px;
+        border-radius: 8px;
+        transition: background 160ms var(--ease), color 160ms var(--ease), transform 160ms var(--ease);
       }
       #x:hover {
         background: var(--chip-hover);
         color: #fff;
+      }
+      #x:active {
+        transform: scale(0.92);
       }
       /* left tab rail */
       #body {
@@ -74,13 +92,14 @@
         min-height: 0;
       }
       nav {
-        width: 62px;
+        width: 64px;
         flex: none;
         border-right: 1px solid var(--line);
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 4px;
         padding: 10px 7px;
+        background: rgba(0, 0, 0, 0.12);
       }
       .tab {
         position: relative;
@@ -93,35 +112,57 @@
         justify-content: center;
         cursor: pointer;
         font: 600 10px system-ui, sans-serif;
-        letter-spacing: 0.08em;
+        letter-spacing: 0.1em;
         text-transform: uppercase;
+        transition: background 180ms var(--ease), color 180ms var(--ease), transform 180ms var(--ease);
+      }
+      .tab::before {
+        content: '';
+        position: absolute;
+        left: -7px;
+        top: 50%;
+        width: 3px;
+        height: 0;
+        border-radius: 0 3px 3px 0;
+        background: var(--accent);
+        transform: translateY(-50%);
+        transition: height 220ms var(--ease-out);
       }
       .tab:hover {
         background: var(--chip);
         color: var(--text);
       }
+      .tab:active {
+        transform: scale(0.96);
+      }
       .tab.active {
-        background: rgba(138, 180, 255, 0.12);
+        background: var(--accent-soft);
         color: var(--accent);
+      }
+      .tab.active::before {
+        height: 60%;
       }
       .tab.ext {
         font-size: 9px;
         padding: 8px 2px;
-        opacity: 0.75;
+        opacity: 0.7;
+      }
+      .tab.ext:hover {
+        opacity: 1;
       }
       .tabdot {
         position: absolute;
         top: 6px;
         right: 8px;
-        width: 7px;
-        height: 7px;
+        width: 6px;
+        height: 6px;
         border-radius: 50%;
         background: var(--dim);
-        transition: background 0.2s;
+        transition: background 0.3s, box-shadow 0.3s;
       }
       .tabdot.on {
         background: #5dd39e;
-        box-shadow: 0 0 6px #5dd39e;
+        box-shadow: 0 0 7px #5dd39e;
       }
       .tabdot.connecting {
         background: #ffd166;
@@ -139,17 +180,23 @@
         flex: 1;
         min-width: 0;
         overflow-y: auto;
-        padding: 12px 14px 16px;
+        padding: 12px 14px 18px;
         display: flex;
         flex-direction: column;
         gap: 14px;
+        scrollbar-gutter: stable;
       }
       main::-webkit-scrollbar {
-        width: 8px;
+        width: 10px;
       }
       main::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.12);
-        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 5px;
+        border: 3px solid transparent;
+        background-clip: padding-box;
+      }
+      main:hover::-webkit-scrollbar-thumb {
+        background-color: rgba(255, 255, 255, 0.18);
       }
       [hidden] {
         display: none !important;
@@ -157,53 +204,84 @@
       .pane {
         display: flex;
         flex-direction: column;
-        gap: 16px;
+        gap: 14px;
       }
+      /* sections are soft panels; each one rises in when its tab opens */
       .pane > section,
       .sub > section {
-        padding-bottom: 14px;
-        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 13px;
+        padding: 11px 12px 12px;
       }
-      .pane > section:last-child,
-      .sub > section:last-child {
-        padding-bottom: 0;
-        border-bottom: none;
+      .sub {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .sub:not([hidden]),
+      .pane:not([hidden]) {
+        animation: rise 260ms var(--ease-out);
+      }
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
       }
       #subtabs,
       #subtabs2 {
+        position: relative;
         display: flex;
-        gap: 4px;
-        border-bottom: 1px solid var(--line);
+        gap: 2px;
+        padding: 3px;
+        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.22);
+        border: 1px solid var(--line);
       }
       .stab {
+        position: relative;
+        z-index: 1;
+        flex: 1;
         border: none;
         background: none;
         color: var(--dim);
         font: 600 10.5px system-ui, sans-serif;
         letter-spacing: 0.08em;
         text-transform: uppercase;
-        padding: 6px 10px 8px;
+        padding: 6px 8px;
+        border-radius: 8px;
         cursor: pointer;
-        border-bottom: 2px solid transparent;
-        margin-bottom: -1px;
+        transition: color 200ms var(--ease);
       }
       .stab:hover {
         color: var(--text);
       }
       .stab.active {
-        color: var(--accent);
-        border-bottom-color: var(--accent);
+        color: #fff;
       }
-      .sub {
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
+      /* the sliding pill behind the active sub-tab */
+      .stab-ind {
+        position: absolute;
+        z-index: 0;
+        top: 3px;
+        bottom: 3px;
+        left: 0;
+        width: 0;
+        border-radius: 8px;
+        background: var(--chip-hover);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.3);
+        transition: transform 320ms var(--ease-out), width 320ms var(--ease-out);
       }
       section > h2 {
-        margin: 0 0 7px;
-        font-size: 10px;
+        margin: 0 0 8px;
+        font-size: 9.5px;
         font-weight: 600;
-        letter-spacing: 0.12em;
+        letter-spacing: 0.14em;
         text-transform: uppercase;
         color: var(--dim);
       }
@@ -222,18 +300,142 @@
         border-radius: 999px;
         padding: 4px 11px;
         cursor: pointer;
-        transition: background 0.12s, transform 0.05s;
+        transition: background 160ms var(--ease), border-color 160ms var(--ease), color 160ms var(--ease),
+          transform 160ms var(--ease), box-shadow 160ms var(--ease);
       }
       .chip:hover {
         background: var(--chip-hover);
+        transform: translateY(-1px);
       }
       .chip:active {
-        transform: scale(0.94);
+        transform: scale(0.95);
+        transition-duration: 60ms;
       }
       .chip.selected {
-        border-color: var(--accent);
+        border-color: var(--accent-ring);
         color: var(--accent);
-        background: rgba(138, 180, 255, 0.1);
+        background: var(--accent-soft);
+        box-shadow: 0 0 0 3px rgba(138, 180, 255, 0.08);
+      }
+      /* presets: a sideways strip of cards, each a live face in that look */
+      .pstrip {
+        position: relative;
+        margin: 0 -12px;
+      }
+      .pstrip::before,
+      .pstrip::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 26px;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 200ms var(--ease);
+        z-index: 1;
+      }
+      .pstrip::before {
+        left: 0;
+        background: linear-gradient(90deg, rgba(15, 17, 20, 0.9), transparent);
+      }
+      .pstrip::after {
+        right: 0;
+        background: linear-gradient(-90deg, rgba(15, 17, 20, 0.9), transparent);
+      }
+      .pstrip.more-l::before,
+      .pstrip.more-r::after {
+        opacity: 1;
+      }
+      #presets {
+        display: flex;
+        gap: 7px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 3px 12px 6px;
+        scroll-snap-type: x proximity;
+        scroll-behavior: smooth;
+        scrollbar-width: none;
+      }
+      #presets::-webkit-scrollbar {
+        display: none;
+      }
+      .pcard {
+        flex: none;
+        width: 64px;
+        scroll-snap-align: start;
+        border: 1px solid transparent;
+        background: var(--chip);
+        border-radius: 12px;
+        padding: 7px 4px 5px;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        color: var(--dim);
+        font: inherit;
+        transition: background 160ms var(--ease), border-color 160ms var(--ease), transform 200ms var(--ease-out),
+          box-shadow 200ms var(--ease), color 160ms var(--ease);
+      }
+      .pcard:hover {
+        background: var(--chip-hover);
+        color: var(--text);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.3);
+      }
+      .pcard:active {
+        transform: scale(0.96);
+        transition-duration: 60ms;
+      }
+      .pcard.selected {
+        border-color: var(--accent-ring);
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+      .pcard.mine {
+        border-color: var(--line-strong);
+      }
+      .pcard.saver {
+        border: 1px dashed var(--line-strong);
+        background: transparent;
+        justify-content: center;
+        min-height: 66px;
+      }
+      .pcard.saver:hover {
+        border-color: var(--accent-ring);
+        color: var(--accent);
+      }
+      .pmini {
+        width: 40px;
+        height: 40px;
+        pointer-events: none;
+        border-radius: 50%;
+        transition: box-shadow 200ms var(--ease);
+      }
+      .pcard.haloed .pmini {
+        box-shadow: 0 0 10px 1px var(--halo);
+      }
+      .pname-lbl {
+        font-size: 8.5px;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        letter-spacing: 0.02em;
+      }
+      .pname {
+        flex: none;
+        align-self: center;
+        box-sizing: border-box;
+        width: 120px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid var(--accent);
+        border-radius: 999px;
+        color: var(--text);
+        font: inherit;
+        padding: 4px 10px;
+        outline: none;
+        box-shadow: 0 0 0 3px var(--accent-soft);
       }
       #grid {
         display: grid;
@@ -244,20 +446,27 @@
         border: 1px solid transparent;
         background: var(--chip);
         border-radius: 11px;
-        padding: 5px 2px 2px;
+        padding: 5px 2px 3px;
         cursor: pointer;
         display: flex;
         flex-direction: column;
         align-items: center;
         gap: 2px;
-        transition: background 0.12s;
+        transition: background 160ms var(--ease), border-color 160ms var(--ease), transform 200ms var(--ease-out),
+          box-shadow 200ms var(--ease);
       }
       .cell:hover {
         background: var(--chip-hover);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.3);
+      }
+      .cell:active {
+        transform: scale(0.96);
+        transition-duration: 60ms;
       }
       .cell.selected {
-        border-color: var(--accent);
-        background: rgba(138, 180, 255, 0.1);
+        border-color: var(--accent-ring);
+        background: var(--accent-soft);
       }
       .cell .mini {
         width: 34px;
@@ -271,6 +480,7 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        transition: color 160ms var(--ease);
       }
       .cell.selected .name {
         color: var(--accent);
@@ -280,34 +490,54 @@
         flex-wrap: wrap;
         gap: 5px;
       }
-      /* colors */
+      /* control rows */
       .crow {
         display: flex;
         align-items: center;
-        gap: 6px;
-        margin-bottom: 7px;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+      .crow:last-child {
+        margin-bottom: 0;
       }
       .crow > .lbl {
-        width: 34px;
+        width: 52px;
         flex: none;
         color: var(--dim);
+        font-size: 11px;
+        letter-spacing: 0.01em;
       }
       .crow > .chips {
         flex: 1;
         align-items: center;
       }
+      .crow > .val {
+        width: 28px;
+        flex: none;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        font-size: 10.5px;
+        color: var(--dim);
+        transition: color 160ms var(--ease);
+      }
+      .crow:hover > .val {
+        color: var(--text);
+      }
       .swatch {
         width: 21px;
         height: 21px;
         border-radius: 50%;
-        border: 1px solid rgba(255, 255, 255, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.22);
         padding: 0;
         cursor: pointer;
         flex: none;
+        transition: transform 180ms var(--ease-out), box-shadow 180ms var(--ease);
+      }
+      .swatch:hover {
+        transform: scale(1.12);
       }
       .swatch.selected {
-        outline: 2px solid var(--accent);
-        outline-offset: 1px;
+        box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
       }
       input[type='color'] {
         width: 23px;
@@ -324,40 +554,153 @@
         border: 1px dashed rgba(255, 255, 255, 0.45);
         border-radius: 50%;
       }
+      /* toggles: real switches */
       .toggle {
         display: inline-flex;
         align-items: center;
-        gap: 7px;
+        gap: 8px;
         cursor: pointer;
         color: var(--text);
       }
+      .toggle input[type='checkbox'] {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 30px;
+        height: 17px;
+        margin: 0;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.12);
+        border: 1px solid var(--line-strong);
+        position: relative;
+        cursor: pointer;
+        flex: none;
+        transition: background 220ms var(--ease), border-color 220ms var(--ease);
+      }
+      .toggle input[type='checkbox']::after {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: #dfe3e7;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+        transition: transform 260ms var(--ease-out), background 220ms var(--ease);
+      }
+      .toggle input[type='checkbox']:checked {
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      .toggle input[type='checkbox']:checked::after {
+        transform: translateX(13px);
+        background: #fff;
+      }
+      .toggle:hover input[type='checkbox']:not(:checked) {
+        background: rgba(255, 255, 255, 0.18);
+      }
+      /* sliders: a hairline rail with the travelled part lit, a small round
+         thumb that swells under the pointer and settles back with easing.
+         The fill has no transition of its own: it stays glued to the thumb */
       input[type='range'] {
+        --p: 0%;
+        appearance: none;
+        -webkit-appearance: none;
         width: 100%;
-        accent-color: var(--accent);
+        height: 22px;
+        margin: 0;
+        background: transparent;
+        cursor: pointer;
+        outline: none;
+        flex: 1;
+        min-width: 0;
+      }
+      input[type='range']::-webkit-slider-runnable-track {
+        height: 3px;
+        border-radius: 2px;
+        background:
+          linear-gradient(90deg, rgba(138, 180, 255, 0.7), var(--accent)) 0 0 / var(--p) 100% no-repeat,
+          rgba(255, 255, 255, 0.1);
+        transition: background-color 160ms var(--ease);
+      }
+      input[type='range']:hover::-webkit-slider-runnable-track {
+        background-color: rgba(255, 255, 255, 0.16);
+      }
+      input[type='range']::-webkit-slider-thumb {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 12px;
+        height: 12px;
+        margin-top: -4.5px;
+        border-radius: 50%;
+        background: #eef2f6;
+        border: none;
+        box-shadow:
+          0 0 0 0 rgba(138, 180, 255, 0),
+          0 1px 3px rgba(0, 0, 0, 0.45);
+        transition:
+          transform 220ms var(--ease),
+          box-shadow 220ms var(--ease),
+          background 220ms ease;
+      }
+      input[type='range']:hover::-webkit-slider-thumb {
+        transform: scale(1.25);
+        box-shadow:
+          0 0 0 5px rgba(138, 180, 255, 0.14),
+          0 1px 3px rgba(0, 0, 0, 0.45);
+      }
+      input[type='range']:active::-webkit-slider-thumb,
+      input[type='range']:focus-visible::-webkit-slider-thumb {
+        transform: scale(1.1);
+        background: #fff;
+        box-shadow:
+          0 0 0 8px rgba(138, 180, 255, 0.2),
+          0 1px 3px rgba(0, 0, 0, 0.45);
+        transition-duration: 120ms;
       }
       select {
-        background: #1c1f22;
+        appearance: none;
+        -webkit-appearance: none;
+        background: rgba(255, 255, 255, 0.05)
+          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238a9199' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E")
+          no-repeat right 8px center;
         color: var(--text);
-        border: 1px solid #333;
-        border-radius: 5px;
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
         font: inherit;
+        padding: 5px 24px 5px 8px;
         max-width: 90px;
+        outline: none;
+        cursor: pointer;
+        transition: border-color 160ms var(--ease), background-color 160ms var(--ease), box-shadow 160ms var(--ease);
+      }
+      select:hover {
+        background-color: rgba(255, 255, 255, 0.08);
+      }
+      select:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
       }
       /* config pane */
       .field-input {
         flex: 1;
         box-sizing: border-box;
-        background: #1c1f22;
-        border: 1px solid #33383d;
-        border-radius: 7px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
         color: var(--text);
         font: 11px system-ui, sans-serif;
         padding: 6px 9px;
         outline: none;
         min-width: 0;
+        transition: border-color 160ms var(--ease), background-color 160ms var(--ease), box-shadow 160ms var(--ease);
+      }
+      .field-input:hover {
+        background-color: rgba(255, 255, 255, 0.07);
       }
       .field-input:focus {
         border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft);
       }
       .conn-row {
         display: flex;
@@ -371,16 +714,24 @@
         padding: 6px 16px;
         font: 600 11px system-ui, sans-serif;
         cursor: pointer;
-        background: var(--accent);
+        background: linear-gradient(180deg, #9cc0ff, var(--accent));
         color: #0c0e11;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        transition: transform 160ms var(--ease), filter 160ms var(--ease), box-shadow 160ms var(--ease);
       }
       #go:hover {
-        filter: brightness(1.1);
+        filter: brightness(1.08);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(138, 180, 255, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+      }
+      #go:active {
+        transform: scale(0.96);
       }
       #go.on {
         background: var(--chip);
         color: var(--text);
-        border: 1px solid var(--line);
+        border: 1px solid var(--line-strong);
+        box-shadow: none;
       }
       #connStatus {
         font-size: 10.5px;
@@ -392,7 +743,7 @@
       #bot {
         flex: 1;
         max-width: none;
-        padding: 5px 8px;
+        padding: 5px 24px 5px 8px;
       }
       .hint {
         font-size: 10.5px;
@@ -407,6 +758,7 @@
         text-decoration: underline;
       }
     </style>
+
   </head>
   <body>
     <div id="card">
@@ -428,8 +780,8 @@
             <div id="subtabs">
               <button class="stab active" data-sub="mood">mood</button>
               <button class="stab" data-sub="look">look</button>
-              <button class="stab" data-sub="voice">voice</button>
               <button class="stab" data-sub="fx">fx</button>
+              <button class="stab" data-sub="voice">voice</button>
             </div>
             <div class="sub" id="sub-mood">
             <section>
@@ -447,7 +799,7 @@
             <div class="sub" id="sub-look" hidden>
             <section>
               <h2>Presets</h2>
-              <div class="chips" id="presets"></div>
+              <div class="pstrip"><div id="presets"></div></div>
             </section>
             <section>
               <h2>Colors</h2>
@@ -463,6 +815,25 @@
               <h2>Size</h2>
               <input type="range" id="size" min="80" max="800" step="4" />
             </section>
+            </div>
+            <div class="sub" id="sub-fx" hidden>
+              <section>
+                <h2>Eyes</h2>
+                <div class="crow"><span class="lbl">bloom</span><input type="range" id="fxBloom" min="0" max="100" /></div>
+                <div class="crow"><span class="lbl">halation</span><input type="range" id="fxHalation" min="0" max="100" /></div>
+                <div class="crow"><span class="lbl">scanlines</span><input type="range" id="fxScan" min="0" max="100" /></div>
+                <div class="crow"><span class="lbl">gloss</span><input type="range" id="fxGloss" min="0" max="100" /></div>
+              </section>
+              <section>
+                <h2>Head</h2>
+                <div class="crow"><span class="lbl">chrome</span><input type="range" id="fxChrome" min="0" max="100" /></div>
+                <div class="crow"><span class="lbl">holo</span><input type="range" id="fxHolo" min="0" max="100" /></div>
+                <div class="crow"><span class="lbl">hue drift</span><input type="range" id="fxHue" min="0" max="100" /></div>
+                <div class="crow"><span class="lbl">neon rim</span><input type="range" id="fxRim" min="0" max="100" /></div>
+                <div class="crow"><span class="lbl">glass</span><input type="range" id="fxGlass" min="0" max="100" /></div>
+                <div class="crow"><span class="lbl">scratches</span><input type="range" id="fxScratch" min="0" max="100" /></div>
+                <div class="hint">all live, all per bot — zero is off. Saved looks capture every slider.</div>
+              </section>
             </div>
             <div class="sub" id="sub-voice" hidden>
               <section>
@@ -483,24 +854,6 @@
                 <h2>ElevenLabs</h2>
                 <div class="crow"><span class="lbl">voice</span><select id="elVoiceSel" style="flex: 1; max-width: none; padding: 5px 8px"></select></div>
                 <div class="hint" id="elHint"></div>
-              </section>
-            </div>
-            <div class="sub" id="sub-fx" hidden>
-              <section>
-                <h2>Eyes</h2>
-                <div class="crow"><span class="lbl">bloom</span><input type="range" id="fxBloom" min="0" max="100" /></div>
-                <div class="crow"><span class="lbl">halation</span><input type="range" id="fxHalation" min="0" max="100" /></div>
-                <div class="crow"><span class="lbl">scanlines</span><input type="range" id="fxScan" min="0" max="100" /></div>
-                <div class="crow"><span class="lbl">gloss</span><input type="range" id="fxGloss" min="0" max="100" /></div>
-              </section>
-              <section>
-                <h2>Head</h2>
-                <div class="crow"><span class="lbl">chrome</span><input type="range" id="fxChrome" min="0" max="100" /></div>
-                <div class="crow"><span class="lbl">holo</span><input type="range" id="fxHolo" min="0" max="100" /></div>
-                <div class="crow"><span class="lbl">hue drift</span><input type="range" id="fxHue" min="0" max="100" /></div>
-                <div class="crow"><span class="lbl">neon rim</span><input type="range" id="fxRim" min="0" max="100" /></div>
-                <div class="crow"><span class="lbl">glass</span><input type="range" id="fxGlass" min="0" max="100" /></div>
-                <div class="hint">all live, all per bot — zero is off. Saved looks capture every slider.</div>
               </section>
             </div>
           </div>
@@ -564,6 +917,64 @@
 
       const $ = (s) => document.querySelector(s)
       let cfg = await window.widget.getCfg()
+
+      // --- sliders: the lit part of the rail follows the value. Programmatic
+      // sets don't fire events, so value writes go through here too ---
+      const rangeFill = (el) => {
+        const min = +el.min || 0
+        const max = +el.max || 100
+        el.style.setProperty('--p', `${(((+el.value - min) / (max - min)) * 100).toFixed(1)}%`)
+      }
+      for (const el of document.querySelectorAll('input[type=range]')) {
+        el.addEventListener('input', () => rangeFill(el))
+        const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')
+        Object.defineProperty(el, 'value', {
+          get() {
+            return desc.get.call(this)
+          },
+          set(v) {
+            desc.set.call(this, v)
+            rangeFill(this)
+            this._show?.()
+          },
+        })
+      }
+
+      // --- sub-tabs: a pill that slides to the active one ---
+      for (const row of document.querySelectorAll('#subtabs, #subtabs2')) {
+        const ind = document.createElement('div')
+        ind.className = 'stab-ind'
+        row.prepend(ind)
+        const place = () => {
+          const on = row.querySelector('.stab.active')
+          if (!on) return
+          ind.style.width = `${on.offsetWidth}px`
+          ind.style.transform = `translateX(${on.offsetLeft}px)`
+        }
+        row.addEventListener('click', () => requestAnimationFrame(place))
+        new ResizeObserver(place).observe(row)
+        place()
+      }
+
+      // --- slider readouts: a value at the rail's end; double-click resets ---
+      for (const el of document.querySelectorAll('.crow > input[type=range]')) {
+        const val = document.createElement('span')
+        val.className = 'val'
+        el.after(val)
+        const show = () => {
+          const v = +el.value
+          val.textContent = el.id === 'voicePitch' ? v.toFixed(2) : `${Math.round(v)}`
+        }
+        el.addEventListener('input', show)
+        el.addEventListener('dblclick', () => {
+          el.value = el.id === 'voicePitch' ? 1 : el.min
+          el.dispatchEvent(new Event('input', { bubbles: true }))
+          el.dispatchEvent(new Event('change', { bubbles: true }))
+        })
+        el._show = show
+        show()
+      }
+      const showRanges = () => document.querySelectorAll('.crow > input[type=range]').forEach((el) => el._show?.())
 
       // --- tabs ---
       for (const tab of document.querySelectorAll('.tab[data-tab]')) {
@@ -693,7 +1104,7 @@
       $('#pupils').addEventListener('change', (e) => window.widget.setCfg({ pupils: e.target.checked }))
 
       // --- fx ---
-      for (const key of ['fxBloom', 'fxHalation', 'fxScan', 'fxChrome', 'fxHolo', 'fxHue', 'fxRim', 'fxGlass', 'fxGloss', 'fxGlass']) {
+      for (const key of ['fxBloom', 'fxHalation', 'fxScan', 'fxChrome', 'fxHolo', 'fxHue', 'fxRim', 'fxGlass', 'fxGloss', 'fxScratch']) {
         const el = $('#' + key)
         el.value = (cfg[key] || 0) * 100
         el.addEventListener('input', () => window.widget.setCfg({ [key]: +el.value / 100 }))
@@ -768,34 +1179,107 @@
       renderVoiceMode()
       loadElVoices()
 
-      // --- presets: built-in full looks, plus saveable custom ones ---
+      // --- presets: full looks. A look is EVERY style key — colours, pupils,
+      // aura, voice, and each fx slider — so applying one is a clean slate,
+      // not a tint over whatever was there. Built-ins list only what differs
+      // from the defaults; the rest resets ---
+      const LOOK_KEYS = () => (cfg.styleKeys || []).filter((k) => k !== 'mood') // mood is a state, not a look
+      const fullLook = (style) => {
+        const look = {}
+        for (const k of LOOK_KEYS()) look[k] = k in style ? style[k] : (cfg.styleDefaults || {})[k]
+        return look
+      }
       const BUILTIN_PRESETS = [
-        ['midnight', { skin: '#16181a', ink: '#e9ebec', aura: 'none' }],
+        // plain fits
+        ['midnight', { skin: '#16181a', ink: '#e9ebec' }],
         ['ghost', { skin: '#f4f5f6', ink: '#101214', aura: 'glow' }],
-        ['terminal', { skin: '#0a0f0b', ink: '#b6ff3d', aura: 'particles' }],
-        ['bubblegum', { skin: '#ff9ecb', ink: '#5f1d3a', aura: 'glow' }],
+        ['terminal', { skin: '#0a0f0b', ink: '#b6ff3d', aura: 'particles', fxScan: 0.35, fxBloom: 0.3 }],
+        ['bubblegum', { skin: '#ff9ecb', ink: '#5f1d3a', aura: 'glow', fxGloss: 0.6 }],
         ['ocean', { skin: '#4ecdc4', ink: '#0b3437', aura: 'ring' }],
+        ['honey', { skin: '#ffd166', ink: '#4a3405', fxGloss: 0.4 }],
+        ['grape', { skin: '#a78bfa', ink: '#241a4d', aura: 'glow', fxHalation: 0.3 }],
+        ['cherry', { skin: '#ff6b6b', ink: '#4d0f0f', fxGloss: 0.5 }],
+        ['cobalt', { skin: '#1f6feb', ink: '#dbe9ff', fxBloom: 0.3 }],
+        ['charcoal rose', { skin: '#2d3436', ink: '#ffb8b8', pupils: true }],
+        // material looks
+        ['chrome', { skin: '#b9c0c7', ink: '#0e1114', fxChrome: 1, fxGloss: 0.7, fxScratch: 0.15 }],
+        ['worn chrome', { skin: '#9aa1a8', ink: '#101316', fxChrome: 1, fxGloss: 0.5, fxScratch: 0.9 }],
+        ['glass', { skin: '#dfe9f2', ink: '#7dffb0', fxGlass: 1, fxChrome: 0.6, fxBloom: 0.5, fxGloss: 0.8 }],
+        ['smoked glass', { skin: '#1a1d21', ink: '#ff9d4d', fxGlass: 0.6, fxChrome: 0.7, fxBloom: 0.6, fxHalation: 0.3 }],
+        ['neon', { skin: '#0d0b14', ink: '#ff4dd2', fxRim: 1, fxBloom: 1, fxHalation: 0.6, fxGloss: 0.5 }],
+        ['crt', { skin: '#0b100d', ink: '#7dff9a', fxScan: 0.8, fxBloom: 0.5, fxHalation: 0.5, fxGlass: 0.25 }],
+        ['holo', { skin: '#101418', ink: '#9be7ff', fxHolo: 0.9, fxGlass: 0.4, fxBloom: 0.4, fxGloss: 0.6 }],
+        ['vaporwave', { skin: '#2b1740', ink: '#ff8ae2', aura: 'ring', fxHue: 0.4, fxHolo: 0.5, fxRim: 0.5, fxBloom: 0.5 }],
+        ['porcelain', { skin: '#f6f1ea', ink: '#2a2420', pupils: true, fxGloss: 0.9, fxChrome: 0.25 }],
+        ['obsidian', { skin: '#07080a', ink: '#c9d1d9', fxChrome: 0.5, fxGloss: 1, fxScratch: 0.3, fxRim: 0.2 }],
       ]
-      const LOOK_KEYS = [
-        'skin', 'ink', 'pupils', 'aura', 'voice', 'voicePitch', 'voiceMode', 'elVoice',
-        'fxBloom', 'fxHalation', 'fxScan', 'fxChrome', 'fxHolo', 'fxHue', 'fxRim', 'fxGlass', 'fxGloss',
-      ]
+      let presetMinis = []
+      const sameLook = (style) => {
+        const look = fullLook(style)
+        return LOOK_KEYS().every((k) => (look[k] ?? cfg.styleDefaults?.[k]) === (cfg[k] ?? cfg.styleDefaults?.[k]))
+      }
       function renderPresets() {
         const row = $('#presets')
+        for (const f of presetMinis) f.destroy()
+        presetMinis = []
         row.replaceChildren()
-        const chip = (label, onClick, title) => {
+        const card = (label, look, onClick, title) => {
           const b = document.createElement('button')
-          b.className = 'chip'
-          b.textContent = label
+          b.className = 'pcard'
           if (title) b.title = title
+          if (look) {
+            const mini = document.createElement('div')
+            mini.className = 'pmini'
+            mini.style.setProperty('--face-skin', look.skin || '#16181a')
+            mini.style.setProperty('--face-ink', look.ink || '#e9ebec')
+            mini.style.setProperty('--face-ring', 'rgba(255,255,255,.12)')
+            b.appendChild(mini)
+            presetMinis.push(createFace(mini, { expression: 'happy', idle: false, pupils: !!look.pupils }))
+            if (look.aura && look.aura !== 'none') {
+              b.style.setProperty('--halo', look.ink || '#fff')
+              b.classList.add('haloed')
+            }
+            b.classList.toggle('selected', sameLook(look))
+          }
+          const name = document.createElement('span')
+          name.className = 'pname-lbl'
+          name.textContent = label
+          b.appendChild(name)
           b.addEventListener('click', onClick)
           row.appendChild(b)
           return b
         }
-        for (const [name, style] of BUILTIN_PRESETS)
-          chip(name, () => window.widget.setCfg(style))
+        // save first, so it never hides at the far end of the strip
+        const saver = card('+ save look', null, () => {
+          const inp = document.createElement('input')
+          inp.className = 'pname'
+          inp.placeholder = 'name this look'
+          inp.value = `look ${(cfg.presets || []).length + 1}`
+          inp.maxLength = 24
+          saver.replaceWith(inp)
+          inp.focus()
+          inp.select()
+          let done = false
+          const finish = (keep) => {
+            if (done) return
+            done = true
+            const name = inp.value.trim()
+            if (keep && name) {
+              const style = fullLook(cfg) // every style key, as it is right now
+              const presets = [...(cfg.presets || []).filter((p) => p.name !== name), { name, style }]
+              window.widget.setCfg({ presets }) // cfg push re-renders the row
+            } else renderPresets()
+          }
+          inp.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') finish(true)
+            if (e.key === 'Escape') finish(false)
+          })
+          inp.addEventListener('blur', () => finish(true))
+        }, 'save the current look — colours, aura, voice, every fx slider — as a preset')
+        saver.classList.add('saver')
         for (const [i, p] of (cfg.presets || []).entries()) {
-          const b = chip(p.name, () => window.widget.setCfg(p.style), 'right-click to delete')
+          const b = card(p.name, p.style, () => window.widget.setCfg(fullLook(p.style)), 'right-click to delete', p.style)
+          b.classList.add('mine')
           b.addEventListener('contextmenu', (e) => {
             e.preventDefault()
             const presets = [...cfg.presets]
@@ -803,13 +1287,26 @@
             window.widget.setCfg({ presets })
           })
         }
-        chip('+ save look', () => {
-          const style = {}
-          for (const k of LOOK_KEYS) style[k] = cfg[k]
-          const presets = [...(cfg.presets || []), { name: `look ${(cfg.presets || []).length + 1}`, style }]
-          window.widget.setCfg({ presets })
-        }, 'save the current look as a preset')
+        for (const [name, style] of BUILTIN_PRESETS)
+          card(name, style, () => window.widget.setCfg(fullLook(style)))
+        // the strip scrolls sideways under a plain wheel, and the fades show
+        // which way there's more
+        const strip = row.parentElement
+        const fades = () => {
+          strip.classList.toggle('more-l', row.scrollLeft > 4)
+          strip.classList.toggle('more-r', row.scrollLeft < row.scrollWidth - row.clientWidth - 4)
+        }
+        row.onscroll = fades
+        requestAnimationFrame(fades)
+        // bring the active look into view
+        row.querySelector('.pcard.selected')?.scrollIntoView({ inline: 'center', block: 'nearest' })
       }
+      $('#presets').addEventListener('wheel', (e) => {
+        if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+          e.preventDefault()
+          $('#presets').scrollBy({ left: e.deltaY, behavior: 'auto' })
+        }
+      }, { passive: false })
       renderPresets()
 
       // --- size ---
@@ -896,7 +1393,9 @@
         renderVoiceMode()
         loadElVoices()
         $('#voiceOn').checked = cfg.voice !== false
-        for (const key of ['fxBloom', 'fxHalation', 'fxScan', 'fxChrome', 'fxHolo', 'fxHue', 'fxRim', 'fxGlass', 'fxGloss', 'fxGlass']) $('#' + key).value = (cfg[key] || 0) * 100
+        for (const key of ['fxBloom', 'fxHalation', 'fxScan', 'fxChrome', 'fxHolo', 'fxHue', 'fxRim', 'fxGlass', 'fxGloss', 'fxScratch']) $('#' + key).value = (cfg[key] || 0) * 100
+        $('#voicePitch').value = cfg.voicePitch || 1
+        showRanges()
         refreshSelection()
       })
 

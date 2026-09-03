@@ -14,6 +14,10 @@ try {
 const TURN_TIMEOUT = 120000 // containers can be slow to first token
 const PING_EVERY = 30000
 
+// Every group ships a Conductor that only delegates to the others. It's not
+// a bot you'd want on the desktop, so it never appears in the pick lists.
+const standIns = (list) => (list || []).filter((i) => i.subdomain !== 'conductor' && i.id !== 'incu-conductor')
+
 class Bridge extends EventEmitter {
   constructor() {
     super()
@@ -98,11 +102,11 @@ class Bridge extends EventEmitter {
     switch (m.type) {
       case 'hello':
         this.user = m.user || null
-        this.incubators = m.incubators || []
+        this.incubators = standIns(m.incubators)
         this.emit('hello', { user: this.user, incubators: this.incubators })
         break
       case 'incubators':
-        this.incubators = m.incubators || []
+        this.incubators = standIns(m.incubators)
         this.emit('hello', { user: this.user, incubators: this.incubators })
         break
       case 'pong':
