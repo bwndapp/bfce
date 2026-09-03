@@ -80,6 +80,16 @@
       #face .bwm {
         filter: var(--fx-eyes, none);
       }
+      /* export mode: just the bot, still, on nothing */
+      body.export #ground,
+      body.export .ctl,
+      body.export #peep,
+      body.export #think {
+        display: none !important;
+      }
+      body.export #face {
+        animation: none !important;
+      }
       /* fx layers ease into their slider values rather than snapping */
       #face svg [style*='var(--fx-'] {
         transition: opacity 260ms cubic-bezier(0.2, 0, 0, 1);
@@ -312,6 +322,8 @@
       const faceEl = document.querySelector('#face')
 
       // --- config lives in the main process; both windows subscribe ---
+      const EXPORT = new URLSearchParams(location.search).has('export')
+      if (EXPORT) document.body.classList.add('export')
       let cfg = await window.widget.getCfg()
 
       const luminance = (hex) => {

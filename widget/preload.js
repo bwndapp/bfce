@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('widget', {
   onChatReply: (cb) => ipcRenderer.on('chat-reply', (_e, r) => cb(r)),
   onChatState: (cb) => ipcRenderer.on('chat-state', (_e, s) => cb(s)),
   onChatFocus: (cb) => ipcRenderer.on('chat-focus', () => cb()),
+  exportPng: () => ipcRenderer.invoke('export-png'),
   caretAt: (p) => ipcRenderer.send('caret', p),
   onCaret: (cb) => ipcRenderer.on('caret', (_e, p) => cb(p)),
   caption: (m) => ipcRenderer.send('caption', m),

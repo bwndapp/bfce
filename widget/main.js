@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, screen, ipcMain } = require('electron')
+const { app, BrowserWindow, Menu, screen, ipcMain, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const brain = require('./brain')
@@ -134,7 +134,7 @@ const mergedCfg = (inst) => ({
 
 function botOf(e) {
   for (const inst of instances.values()) {
-    for (const w of [inst.win, inst.chat, inst.settings, inst.cap]) {
+    for (const w of [inst.win, inst.chat, inst.settings, inst.cap, inst.shot]) {
       if (w && !w.isDestroyed() && w.webContents === e.sender) return inst
     }
   }
@@ -525,6 +525,63 @@ ipcMain.on('caption-size', (e, h) => {
   positionCaptions(inst)
 })
 
+// --- export: the bot as a 1080×1080 transparent PNG, every effect intact.
+// A hidden offscreen window renders index.html in export mode (no controls,
+// no ground shadow, no float) at the target size, then a capture with alpha
+// goes to a save dialog ---
+const EXPORT_PX = 1080
+async function exportPng(inst) {
+  if (!inst?.win || inst.win.isDestroyed()) return { error: 'no bot' }
+  if (inst.shot && !inst.shot.isDestroyed()) return { error: 'busy' }
+  const shot = new BrowserWindow({
+    width: EXPORT_PX,
+    height: EXPORT_PX,
+    show: false,
+    transparent: true,
+    frame: false,
+    skipTaskbar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      offscreen: true,
+      backgroundThrottling: false,
+    },
+  })
+  inst.shot = shot
+  try {
+    shot.webContents.setFrameRate(60)
+    await shot.loadFile('index.html', { query: { export: '1' } })
+    // the face builds, fx layers ease in (260ms), the sphere warp maps
+    // generate: give it a moment to settle
+    await new Promise((r) => setTimeout(r, 1200))
+    let img = await shot.webContents.capturePage()
+    const sz = img.getSize()
+    if (sz.width !== EXPORT_PX || sz.height !== EXPORT_PX) img = img.resize({ width: EXPORT_PX, height: EXPORT_PX })
+    const name = bridge.incubators.find((i) => i.id === inst.incubator)?.name || 'bbot'
+    const safe = name.replace(/[^\w.-]+/g, '-').toLowerCase()
+    if (process.env.BBOT_EXPORT_TO) {
+      // headless check: skip the dialog and write straight out
+      fs.writeFileSync(process.env.BBOT_EXPORT_TO, img.toPNG())
+      return { path: process.env.BBOT_EXPORT_TO }
+    }
+    const { canceled, filePath } = await dialog.showSaveDialog(inst.settings && !inst.settings.isDestroyed() ? inst.settings : inst.win, {
+      title: 'Export bbot',
+      defaultPath: path.join(app.getPath('downloads'), `${safe}-${EXPORT_PX}.png`),
+      filters: [{ name: 'PNG image', extensions: ['png'] }],
+    })
+    if (canceled || !filePath) return { canceled: true }
+    fs.writeFileSync(filePath, img.toPNG())
+    return { path: filePath }
+  } catch (err) {
+    return { error: err?.message || String(err) }
+  } finally {
+    if (!shot.isDestroyed()) shot.destroy()
+    inst.shot = null
+  }
+}
+ipcMain.handle('export-png', (e) => exportPng(botOf(e)))
+if (process.env.BBOT_EXPORT_TO)
+  app.whenReady().then(() => setTimeout(async () => console.log('export', JSON.stringify(await exportPng(primary()))), 4000))
+
 // --- the right-click menu: clone a bbot per incubator, dismiss clones ---
 function faceMenu(inst) {
   const nameOf = (id) => bridge.incubators.find((i) => i.id === id)?.name || id || 'unbound'
@@ -548,6 +605,7 @@ function faceMenu(inst) {
     { type: 'separator' },
     { label: 'Chat', click: () => toggleChat(inst) },
     { label: 'Customize', click: () => toggleSettings(inst) },
+    { label: 'Export PNG…', click: () => exportPng(inst) },
     { label: 'Clone as', submenu: cloneItems },
   ]
   if (!inst.primary) {

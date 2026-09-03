@@ -63,8 +63,7 @@
         font-size: 13px;
         font-weight: 600;
         letter-spacing: 0.01em;
-        margin: 0;
-        flex: 1;
+        margin: 0 2px 0 0;
       }
       #x {
         -webkit-app-region: no-drag;
@@ -142,6 +141,70 @@
       }
       .tab.active::before {
         height: 60%;
+      }
+      /* the export frame in the header: a viewfinder with a dot that
+         pulses while it renders and turns into a tick when the file lands */
+      .hbtn {
+        -webkit-app-region: no-drag;
+        border: none;
+        background: none;
+        color: var(--dim);
+        width: 26px;
+        height: 26px;
+        padding: 0;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        border-radius: 8px;
+        transition: background 160ms var(--ease), color 160ms var(--ease), transform 160ms var(--ease);
+      }
+      .hbtn:hover {
+        background: var(--chip-hover);
+        color: #fff;
+      }
+      .hbtn:active {
+        transform: scale(0.92);
+      }
+      .hbtn svg {
+        display: block;
+      }
+      .hbtn .ex-dot {
+        fill: currentColor;
+        stroke: none;
+        transform-origin: 10px 10px;
+        transition: transform 200ms var(--ease), opacity 200ms var(--ease);
+      }
+      .hbtn .ex-ok {
+        opacity: 0;
+        stroke-dasharray: 12;
+        stroke-dashoffset: 12;
+        transition: opacity 120ms, stroke-dashoffset 320ms var(--ease-out);
+      }
+      .hbtn.busy {
+        color: var(--accent);
+      }
+      .hbtn.busy .ex-dot {
+        animation: exdot 900ms ease-in-out infinite;
+      }
+      @keyframes exdot {
+        50% {
+          transform: scale(0.55);
+          opacity: 0.5;
+        }
+      }
+      .hbtn.done {
+        color: #5dd39e;
+      }
+      .hbtn.done .ex-dot {
+        transform: scale(0);
+        opacity: 0;
+      }
+      .hbtn.done .ex-ok {
+        opacity: 1;
+        stroke-dashoffset: 0;
+      }
+      .hbtn.failed {
+        color: #ff6b6b;
       }
       .tab.ext {
         font-size: 9px;
@@ -770,6 +833,17 @@
       <header>
         <div class="dot" id="headFace"></div>
         <h1>bbot</h1>
+        <button class="hbtn" id="exportPng" title="Export as PNG — 1080×1080, transparent, every effect">
+          <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 7V4.5A1.5 1.5 0 0 1 4.5 3H7" />
+            <path d="M13 3h2.5A1.5 1.5 0 0 1 17 4.5V7" />
+            <path d="M17 13v2.5a1.5 1.5 0 0 1-1.5 1.5H13" />
+            <path d="M7 17H4.5A1.5 1.5 0 0 1 3 15.5V13" />
+            <circle class="ex-dot" cx="10" cy="10" r="2.6" />
+            <path class="ex-ok" d="M6.5 10.5l2.3 2.3L13.8 8" />
+          </svg>
+        </button>
+        <span style="flex: 1"></span>
         <button id="x" title="Close">✕</button>
       </header>
       <div id="body">
@@ -1315,6 +1389,27 @@
         }
       }, { passive: false })
       renderPresets()
+
+      // --- export ---
+      $('#exportPng').addEventListener('click', async () => {
+        const b = $('#exportPng')
+        if (b.classList.contains('busy')) return
+        b.classList.add('busy')
+        b.classList.remove('done', 'failed')
+        const r = await window.widget.exportPng()
+        b.classList.remove('busy')
+        if (r.path) {
+          b.classList.add('done')
+          b.title = `saved ${r.path.split(/[\/]/).pop()}`
+        } else if (r.error) {
+          b.classList.add('failed')
+          b.title = `couldn't export: ${r.error}`
+        }
+        setTimeout(() => {
+          b.classList.remove('done', 'failed')
+          b.title = 'Export as PNG — 1080×1080, transparent, every effect'
+        }, 2600)
+      })
 
       // --- size ---
       const size = $('#size')
