@@ -459,13 +459,39 @@ async function openThread(inst) {
   }
 }
 
-bridge.on('notify', (n) => {
+bridge.on('notify', async (n) => {
   const inst =
     [...instances.values()].find((i) => i.incubator === n.incubator_id) || primary()
   if (!inst) return
   inst.lastNotif = n
   toWin(inst, 'notify', { from: n.from || 'a bot', kind: n.kind })
   if (inst.chat && !inst.chat.isDestroyed() && inst.chat.isVisible()) openThread(inst)
+  // yapping: a bot with a real voice speaks its DM out loud, unprompted
+  const style = styleFor(inst.incubator)
+  if (
+    style.voiceMode === 'el' &&
+    style.voice !== false &&
+    cfg.elKey &&
+    style.elVoice &&
+    !inst.el // never talk over an in-flight reply
+  ) {
+    try {
+      const h = await bridge.history(n.conversation_id)
+      const lastMsg = [...(h.messages || [])].reverse().find((m) => m.role === 'assistant')
+      const text = (lastMsg?.content || '').slice(0, 800)
+      if (!text) return
+      inst.conversationId = h.conversation_id // replies continue this thread
+      const el = elStart(cfg.elKey, style.elVoice, (a) => {
+        toWin(inst, 'el-audio', a)
+        if (a.done && inst.el === el) inst.el = null
+      })
+      if (el) {
+        inst.el = el
+        el.feed(text)
+        el.end()
+      }
+    } catch {}
+  }
 })
 
 // --- IPC (everything resolves the calling window's bbot) ---

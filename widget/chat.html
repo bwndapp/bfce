@@ -330,15 +330,28 @@
       const input = document.querySelector('#input')
       const updateBar = () => (bar.hidden = log.children.length === 0)
 
-      // bubbles wear the bbot's colours
+      // bubbles wear the bbot's colours — but text falls back to plain
+      // dark/light when the eye colour doesn't actually read on the skin
       let cfg = await window.widget.getCfg()
       const applyVars = () => {
         const lum = (h) => {
           const n = parseInt(h.slice(1), 16)
           return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255
         }
+        const relLum = (h) => {
+          const n = parseInt(h.slice(1), 16)
+          const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+            v /= 255
+            return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
+          })
+          return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+        }
+        const l1 = relLum(cfg.skin)
+        const l2 = relLum(cfg.ink)
+        const ratio = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)
+        const text = ratio >= 3.2 ? cfg.ink : l1 > 0.3 ? '#14171a' : '#edeff1'
         log.style.setProperty('--skin', cfg.skin)
-        log.style.setProperty('--ink', cfg.ink)
+        log.style.setProperty('--ink', text)
         log.style.setProperty('--ring', lum(cfg.skin) > 0.5 ? 'rgba(0,0,0,.3)' : '#2f3336')
       }
       applyVars()
