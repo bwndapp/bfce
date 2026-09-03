@@ -7,7 +7,9 @@ const { elStart } = require('./el')
 
 const SIZE = 180
 const CHAT_W = 320
-const ICON = path.join(__dirname, '..', 'docs', 'logo.png')
+// widget/icon.png: the mark on a transparent background — docs/logo.png is
+// flattened RGB and shows as a hard square in the taskbar
+const ICON = path.join(__dirname, 'icon.png')
 
 // styling belongs to the incubator, so a cloned bot keeps its outfit
 const STYLE_KEYS = [
