@@ -341,12 +341,16 @@ export function createFace(host, options = {}) {
 
     // Head: drifts a little toward whatever it's looking at. Small on purpose —
     // a sphere that rotates shouldn't also slide, or the ball reads as a sticker.
+    // Speech energy adds a talking jiggle: a bob, a slight roll, a hair of squash.
+    const talk = clamp(advance(talkS, dt), 0, 1)
     const hx = o.hx + gx * G.lean
-    const hy = o.hy + gy * G.lean
-    const rot = o.rot + shape.head.x
+    const hy = o.hy + gy * G.lean - talk * (1 + Math.sin(now * 0.013) * 0.9)
+    const rot = o.rot + shape.head.x + Math.sin(now * 0.021) * talk * 1.7
+    const tsx = o.sx * (1 - talk * 0.012)
+    const tsy = o.sy * (1 + talk * 0.028)
     headGroup.setAttribute(
       'transform',
-      `translate(${hx.toFixed(2)} ${hy.toFixed(2)}) rotate(${rot.toFixed(2)}) scale(${o.sx.toFixed(3)} ${o.sy.toFixed(3)})`,
+      `translate(${hx.toFixed(2)} ${hy.toFixed(2)}) rotate(${rot.toFixed(2)}) scale(${tsx.toFixed(3)} ${tsy.toFixed(3)})`,
     )
 
     // Yaw about the vertical axis, pitch about the horizontal one. Pitch is
@@ -411,7 +415,9 @@ export function createFace(host, options = {}) {
 
     if (mouth) {
       const curve = shape.mouth.x
-      const open = clamp(shape.open.x, 0, 1)
+      // Speech opens the mouth over the expression — enough to clearly flap,
+      // not so much that every word is a shout.
+      const open = clamp(Math.max(shape.open.x, talk * 0.85), 0, 1)
       const w = G.mouthW
 
       const m = project(0, G.mouthY, cosYaw, sinYaw, cosPitch, sinPitch)
@@ -425,11 +431,14 @@ export function createFace(host, options = {}) {
       // ellipse instead of leaving two half-faded stubs poking out either side —
       // which is what a fading-only crossfade looks like, and talking lives in
       // exactly that range.
-      const cw = w * (1 - open * 0.75)
+      // Talking lives in the mid-open range, where a slow crossfade shows the
+      // curve AND the ellipse at once — two mouths. Retire the curve hard:
+      // gone entirely by ~40% open, leaving the ellipse to do the talking.
+      const cw = Math.max(0.5, w * (1 - open * 1.6))
       mouth.setAttribute('d', `M ${-cw.toFixed(2)} 0 Q 0 ${(curve * 11).toFixed(2)} ${cw.toFixed(2)} 0`)
-      mouth.setAttribute('opacity', (1 - open).toFixed(3))
-      mouthOpen.setAttribute('rx', (6.5 + open * 2.5).toFixed(2))
-      mouthOpen.setAttribute('ry', (open * 8).toFixed(2))
+      mouth.setAttribute('opacity', clamp(1 - open * 2.5, 0, 1).toFixed(3))
+      mouthOpen.setAttribute('rx', (6.5 + open * 3.2).toFixed(2))
+      mouthOpen.setAttribute('ry', (open * 9.5).toFixed(2))
       // Full ink, always: at ry 0 it is invisible anyway, so height alone says
       // how open the mouth is. Fading it too meant a half-open mouth was a
       // half-transparent ellipse under a half-transparent curve — which reads as
@@ -438,9 +447,20 @@ export function createFace(host, options = {}) {
     }
   }
 
+  // Speech energy follows its own snappy spring, so lip-sync callers can feed
+  // raw per-frame amplitude and still get organic motion out.
+  const talkS = spring(0, 950, 22)
+
   const api = {
     el: root,
     _frame: frame,
+
+    // Cartoon lip-sync: 0..1 speech energy. The mouth opens on top of the
+    // expression, and the head bobs and squashes like it means it.
+    talk(level) {
+      talkS.to = clamp(level, 0, 1)
+      return api
+    },
 
     setExpression(name) {
       const preset = EXPRESSIONS[name]

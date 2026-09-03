@@ -157,7 +157,47 @@
       .pane {
         display: flex;
         flex-direction: column;
-        gap: 14px;
+        gap: 16px;
+      }
+      .pane > section,
+      .sub > section {
+        padding-bottom: 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      .pane > section:last-child,
+      .sub > section:last-child {
+        padding-bottom: 0;
+        border-bottom: none;
+      }
+      #subtabs,
+      #subtabs2 {
+        display: flex;
+        gap: 4px;
+        border-bottom: 1px solid var(--line);
+      }
+      .stab {
+        border: none;
+        background: none;
+        color: var(--dim);
+        font: 600 10.5px system-ui, sans-serif;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 6px 10px 8px;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -1px;
+      }
+      .stab:hover {
+        color: var(--text);
+      }
+      .stab.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+      }
+      .sub {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
       }
       section > h2 {
         margin: 0 0 7px;
@@ -385,6 +425,12 @@
         </nav>
         <main>
           <div class="pane" id="pane-custom">
+            <div id="subtabs">
+              <button class="stab active" data-sub="mood">mood</button>
+              <button class="stab" data-sub="look">look</button>
+              <button class="stab" data-sub="voice">voice</button>
+            </div>
+            <div class="sub" id="sub-mood">
             <section>
               <h2>Mood</h2>
               <div id="autoChip">
@@ -396,6 +442,12 @@
               <h2>Poke</h2>
               <div class="chips" id="reactions"></div>
             </section>
+            </div>
+            <div class="sub" id="sub-look" hidden>
+            <section>
+              <h2>Presets</h2>
+              <div class="chips" id="presets"></div>
+            </section>
             <section>
               <h2>Colors</h2>
               <div class="crow"><span class="lbl">skin</span><span class="chips" id="skins"></span></div>
@@ -403,24 +455,43 @@
               <label class="toggle"><input type="checkbox" id="pupils" /> pupils</label>
             </section>
             <section>
-              <h2>Voice</h2>
-              <div class="crow">
-                <label class="toggle"><input type="checkbox" id="voiceOn" /> speak</label>
-                <span class="lbl" style="width: auto">low</span>
-                <input type="range" id="voicePitch" min="0.6" max="1.8" step="0.05" style="flex: 1" />
-                <span class="lbl" style="width: auto">high</span>
-              </div>
-            </section>
-            <section>
-              <h2>Fits</h2>
-              <div class="chips" id="presets"></div>
+              <h2>Aura</h2>
+              <div class="chips" id="auras"></div>
             </section>
             <section>
               <h2>Size</h2>
               <input type="range" id="size" min="80" max="800" step="4" />
             </section>
+            </div>
+            <div class="sub" id="sub-voice" hidden>
+              <section>
+                <h2>Engine</h2>
+                <div class="chips" id="vmodes"></div>
+                <div class="hint" id="vmodeHint" style="margin-top: 7px"></div>
+              </section>
+              <section>
+                <h2>Synth</h2>
+                <div class="crow">
+                  <label class="toggle"><input type="checkbox" id="voiceOn" /> speak</label>
+                  <span class="lbl" style="width: auto">low</span>
+                  <input type="range" id="voicePitch" min="0.6" max="1.8" step="0.05" style="flex: 1" />
+                  <span class="lbl" style="width: auto">high</span>
+                </div>
+              </section>
+              <section>
+                <h2>ElevenLabs</h2>
+                <div class="crow"><span class="lbl">voice</span><select id="elVoiceSel" style="flex: 1; max-width: none; padding: 5px 8px"></select></div>
+                <div class="hint" id="elHint"></div>
+              </section>
+            </div>
           </div>
           <div class="pane" id="pane-config" hidden>
+            <div id="subtabs2">
+              <button class="stab active" data-sub2="bwnd">bwnd</button>
+              <button class="stab" data-sub2="el">elevenlabs</button>
+              <button class="stab" data-sub2="app">app</button>
+            </div>
+            <div class="sub" id="sub2-bwnd">
             <section>
               <h2>Connection</h2>
               <div class="crow"><span class="lbl">server</span><input class="field-input" type="text" id="server" placeholder="wss://bwnd.app/api/v1/incubators/public/bbots/ws" spellcheck="false" /></div>
@@ -436,10 +507,28 @@
                 keys are minted at <a href="https://bwnd.app" target="_blank">bwnd.app</a>
               </div>
             </section>
-            <section>
-              <h2>Startup</h2>
-              <label class="toggle"><input type="checkbox" id="autostart" /> launch when the computer starts</label>
-            </section>
+            </div>
+            <div class="sub" id="sub2-el" hidden>
+              <section>
+                <h2>ElevenLabs</h2>
+                <div class="crow"><span class="lbl">key</span><input class="field-input" type="password" id="elKey" placeholder="ElevenLabs API key" spellcheck="false" /></div>
+                <div class="hint">
+                  powers real voices — pick the engine and a voice per bot in
+                  style → voice. Billed per character by ElevenLabs.
+                </div>
+              </section>
+            </div>
+            <div class="sub" id="sub2-app" hidden>
+              <section>
+                <h2>Startup</h2>
+                <label class="toggle"><input type="checkbox" id="autostart" /> launch when the computer starts</label>
+              </section>
+              <section>
+                <h2>Chat</h2>
+                <label class="toggle"><input type="checkbox" id="showFeed" /> show conversation history</label>
+                <div class="hint" style="margin-top: 6px">off = just the entry box; the thread still lives in Tension</div>
+              </section>
+            </div>
           </div>
         </main>
       </div>
@@ -455,8 +544,19 @@
       for (const tab of document.querySelectorAll('.tab[data-tab]')) {
         tab.addEventListener('click', () => {
           for (const t of document.querySelectorAll('.tab[data-tab]')) t.classList.toggle('active', t === tab)
-          $('#pane-custom').hidden = tab.dataset.tab !== 'custom'
-          $('#pane-config').hidden = tab.dataset.tab !== 'config'
+          for (const p of document.querySelectorAll('.pane')) p.hidden = p.id !== 'pane-' + tab.dataset.tab
+        })
+      }
+      for (const st of document.querySelectorAll('.stab[data-sub]')) {
+        st.addEventListener('click', () => {
+          for (const t of document.querySelectorAll('.stab[data-sub]')) t.classList.toggle('active', t === st)
+          for (const s of document.querySelectorAll('#pane-custom .sub')) s.hidden = s.id !== 'sub-' + st.dataset.sub
+        })
+      }
+      for (const st of document.querySelectorAll('.stab[data-sub2]')) {
+        st.addEventListener('click', () => {
+          for (const t of document.querySelectorAll('.stab[data-sub2]')) t.classList.toggle('active', t === st)
+          for (const s of document.querySelectorAll('#pane-config .sub')) s.hidden = s.id !== 'sub2-' + st.dataset.sub2
         })
       }
       // outbound links open in the real browser via the window-open handler
@@ -527,6 +627,8 @@
             b.classList.toggle('selected', b.dataset.c === cfg[key])
         }
         $('#pupils').checked = cfg.pupils
+        for (const b of document.querySelectorAll('#auras .chip'))
+          b.classList.toggle('selected', b.dataset.v === (cfg.aura || 'none'))
       }
 
       $('#auto').addEventListener('click', () => window.widget.setCfg({ mood: 'auto' }))
@@ -565,27 +667,115 @@
 
       $('#pupils').addEventListener('change', (e) => window.widget.setCfg({ pupils: e.target.checked }))
 
+      // --- aura ---
+      for (const v of ['none', 'glow', 'ring', 'particles']) {
+        const b = document.createElement('button')
+        b.className = 'chip'
+        b.textContent = v
+        b.dataset.v = v
+        b.addEventListener('click', () => window.widget.setCfg({ aura: v }))
+        $('#auras').appendChild(b)
+      }
+
       // --- voice ---
       $('#voiceOn').checked = cfg.voice !== false
       $('#voicePitch').value = cfg.voicePitch || 1
       $('#voiceOn').addEventListener('change', (e) => window.widget.setCfg({ voice: e.target.checked }))
       $('#voicePitch').addEventListener('change', () => window.widget.setCfg({ voicePitch: +$('#voicePitch').value }))
 
-      // --- presets ---
-      const PRESETS = [
-        ['midnight', { skin: '#16181a', ink: '#e9ebec' }],
-        ['ghost', { skin: '#f4f5f6', ink: '#101214' }],
-        ['terminal', { skin: '#0a0f0b', ink: '#b6ff3d' }],
-        ['bubblegum', { skin: '#ff9ecb', ink: '#5f1d3a' }],
-        ['ocean', { skin: '#4ecdc4', ink: '#0b3437' }],
-      ]
-      for (const [name, patch] of PRESETS) {
+      for (const v of ['babble', 'elevenlabs']) {
         const b = document.createElement('button')
         b.className = 'chip'
-        b.textContent = name
-        b.addEventListener('click', () => window.widget.setCfg(patch))
-        $('#presets').appendChild(b)
+        b.textContent = v
+        b.dataset.v = v === 'elevenlabs' ? 'el' : v
+        b.addEventListener('click', () => window.widget.setCfg({ voiceMode: b.dataset.v }))
+        $('#vmodes').appendChild(b)
       }
+      function renderVoiceMode() {
+        for (const b of document.querySelectorAll('#vmodes .chip'))
+          b.classList.toggle('selected', b.dataset.v === (cfg.voiceMode || 'babble'))
+        $('#vmodeHint').textContent =
+          (cfg.voiceMode || 'babble') === 'el'
+            ? cfg.elKey
+              ? 'replies are spoken with the ElevenLabs voice below'
+              : 'add your ElevenLabs key in config to enable real voices'
+            : 'the built-in synthesized babble — free, offline, adorable'
+      }
+
+      let elLoadedForKey = null
+      async function loadElVoices() {
+        const sel = $('#elVoiceSel')
+        if (!cfg.elKey) {
+          sel.replaceChildren()
+          $('#elHint').textContent = 'no key set — add it in config'
+          return
+        }
+        if (elLoadedForKey === cfg.elKey) {
+          if (sel.querySelector(`option[value="${cfg.elVoice}"]`)) sel.value = cfg.elVoice
+          return
+        }
+        $('#elHint').textContent = 'loading voices…'
+        const r = await window.widget.elVoices()
+        if (r.error) {
+          $('#elHint').textContent = `couldn't load voices: ${r.error}`
+          return
+        }
+        elLoadedForKey = cfg.elKey
+        sel.replaceChildren()
+        for (const v of r.voices) {
+          const o = document.createElement('option')
+          o.value = v.id
+          o.textContent = v.name
+          sel.appendChild(o)
+        }
+        if (r.voices.some((v) => v.id === cfg.elVoice)) sel.value = cfg.elVoice
+        else if (r.voices.length) window.widget.setCfg({ elVoice: r.voices[0].id })
+        $('#elHint').textContent = `${r.voices.length} voices on this account — picked per bot`
+      }
+      $('#elVoiceSel').addEventListener('change', () => window.widget.setCfg({ elVoice: $('#elVoiceSel').value }))
+      renderVoiceMode()
+      loadElVoices()
+
+      // --- presets: built-in full looks, plus saveable custom ones ---
+      const BUILTIN_PRESETS = [
+        ['midnight', { skin: '#16181a', ink: '#e9ebec', aura: 'none' }],
+        ['ghost', { skin: '#f4f5f6', ink: '#101214', aura: 'glow' }],
+        ['terminal', { skin: '#0a0f0b', ink: '#b6ff3d', aura: 'particles' }],
+        ['bubblegum', { skin: '#ff9ecb', ink: '#5f1d3a', aura: 'glow' }],
+        ['ocean', { skin: '#4ecdc4', ink: '#0b3437', aura: 'ring' }],
+      ]
+      const LOOK_KEYS = ['skin', 'ink', 'pupils', 'aura', 'voice', 'voicePitch']
+      function renderPresets() {
+        const row = $('#presets')
+        row.replaceChildren()
+        const chip = (label, onClick, title) => {
+          const b = document.createElement('button')
+          b.className = 'chip'
+          b.textContent = label
+          if (title) b.title = title
+          b.addEventListener('click', onClick)
+          row.appendChild(b)
+          return b
+        }
+        for (const [name, style] of BUILTIN_PRESETS)
+          chip(name, () => window.widget.setCfg(style))
+        for (const [i, p] of (cfg.presets || []).entries()) {
+          const b = chip(p.name, () => window.widget.setCfg(p.style), 'right-click to delete')
+          b.addEventListener('contextmenu', (e) => {
+            e.preventDefault()
+            const presets = [...cfg.presets]
+            presets.splice(i, 1)
+            window.widget.setCfg({ presets })
+          })
+        }
+        chip('+ save look', () => {
+          const style = {}
+          for (const k of LOOK_KEYS) style[k] = cfg[k]
+          const presets = [...(cfg.presets || []), { name: `look ${(cfg.presets || []).length + 1}`, style }]
+          window.widget.setCfg({ presets })
+        }, 'save the current look as a preset')
+      }
+      renderPresets()
 
       // --- size ---
       const size = $('#size')
@@ -598,6 +788,8 @@
       $('#auto-connect').checked = !!cfg.autoConnect
       $('#server').addEventListener('change', () => window.widget.setCfg({ server: $('#server').value.trim() }))
       $('#token').addEventListener('change', () => window.widget.setCfg({ token: $('#token').value.trim() }))
+      $('#elKey').value = cfg.elKey || ''
+      $('#elKey').addEventListener('change', () => window.widget.setCfg({ elKey: $('#elKey').value.trim() }))
       $('#auto-connect').addEventListener('change', (e) => window.widget.setCfg({ autoConnect: e.target.checked }))
 
       let connStatus = 'off'
@@ -653,6 +845,10 @@
       $('#autostart').checked = await window.widget.getAutostart()
       $('#autostart').addEventListener('change', (e) => window.widget.setAutostart(e.target.checked))
 
+      // --- chat feed ---
+      $('#showFeed').checked = cfg.showFeed !== false
+      $('#showFeed').addEventListener('change', (e) => window.widget.setCfg({ showFeed: e.target.checked }))
+
       // --- sync ---
       window.widget.onCfg((c) => {
         const rebuild = c.pupils !== cfg.pupils
@@ -661,6 +857,10 @@
         applyVars()
         if (rebuild) buildGrid()
         if (rebuild || moodChanged) buildHead()
+        renderPresets()
+        renderVoiceMode()
+        loadElVoices()
+        $('#voiceOn').checked = cfg.voice !== false
         refreshSelection()
       })
 

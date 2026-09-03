@@ -31,11 +31,16 @@
       #ground {
         position: absolute;
         left: 50%;
-        bottom: 2%;
-        width: 56%;
-        height: 6%;
+        bottom: 1.5%;
+        width: 66%;
+        height: 8%;
         transform: translateX(-50%);
-        background: radial-gradient(closest-side, rgba(0, 0, 0, 0.34), rgba(0, 0, 0, 0));
+        background: radial-gradient(
+          closest-side,
+          rgba(0, 0, 0, 0.55),
+          rgba(0, 0, 0, 0.25) 55%,
+          rgba(0, 0, 0, 0)
+        );
         pointer-events: none;
         z-index: 0;
       }
@@ -190,6 +195,19 @@
       #think[hidden] {
         display: none;
       }
+      /* aura particles twinkle (orbiting is SMIL, anchored at the centre) */
+      .bwa-tw {
+        animation: auratw 2.6s ease-in-out infinite;
+      }
+      @keyframes auratw {
+        0%,
+        100% {
+          opacity: 0.15;
+        }
+        50% {
+          opacity: 0.85;
+        }
+      }
     </style>
   </head>
   <body>
@@ -225,10 +243,34 @@
         const n = parseInt(hex.slice(1), 16)
         return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255
       }
+      // the aura glows in a colour derived from the body: dark skins get a
+      // brighter, more saturated self; light skins a deeper one
+      function auraColor(hex) {
+        const n = parseInt(hex.slice(1), 16)
+        let r = ((n >> 16) & 255) / 255
+        let g = ((n >> 8) & 255) / 255
+        let b = (n & 255) / 255
+        const max = Math.max(r, g, b)
+        const min = Math.min(r, g, b)
+        let h = 0
+        const l = (max + min) / 2
+        const d = max - min
+        let s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1))
+        if (d > 0) {
+          if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60
+          else if (max === g) h = ((b - r) / d + 2) * 60
+          else h = ((r - g) / d + 4) * 60
+        }
+        s = Math.min(1, Math.max(s, 0.3) + 0.15)
+        const nl = l < 0.5 ? Math.min(0.72, l + 0.32) : Math.max(0.28, l - 0.28)
+        return `hsl(${h.toFixed(0)} ${(s * 100).toFixed(0)}% ${(nl * 100).toFixed(0)}%)`
+      }
+
       function applyColors() {
         // set on body: the face inherits, and so does the peep bubble
         document.body.style.setProperty('--face-skin', cfg.skin)
         document.body.style.setProperty('--face-ink', cfg.ink)
+        document.body.style.setProperty('--aura-color', auraColor(cfg.skin))
         // Keep the hairline visible on both light and dark skins.
         document.body.style.setProperty(
           '--face-ring',
@@ -249,13 +291,141 @@
           pupils: cfg.pupils,
         })
         renderLighting()
+        renderMouth()
+        renderAura()
         if (!extrasRaf) extrasRaf = requestAnimationFrame(extrasFrame)
+      }
+
+      // --- the talking mouth: ours, not the library's. Purpose-built for
+      // speech, visible only while speaking, and projected onto the same
+      // sphere the eyes ride (yaw/pitch recovered from their midpoint).
+      let mouthG = null
+      let mouthPath = null
+      let eyeEls = []
+      let mBaseY = -3
+      let mOpen = 0
+      let mVis = 0
+      function renderMouth() {
+        const svgEl = faceEl.querySelector('svg')
+        const headGroup = svgEl?.getElementsByTagName('g')[0]
+        if (!headGroup) return
+        headGroup.querySelector(':scope > .bwm')?.remove()
+        mouthG = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+        mouthG.setAttribute('class', 'bwm')
+        mouthG.setAttribute('opacity', '0')
+        mouthG.style.pointerEvents = 'none'
+        mouthPath = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+        mouthPath.style.fill = 'var(--face-ink)'
+        mouthG.appendChild(mouthPath)
+        headGroup.appendChild(mouthG)
+        eyeEls = [...faceEl.querySelectorAll('.bwf-eye-group')]
+        mOpen = 0
+        mVis = 0
+      }
+      function updateMouth(level) {
+        if (!mouthG || !mouthG.isConnected) return
+        // fast attack, slower release: syllable flap without flicker
+        const target = level * 0.9
+        mOpen += (target - mOpen) * (target > mOpen ? 0.5 : 0.22)
+        const want = level > 0.03 || mOpen > 0.05 ? 1 : 0
+        mVis += (want - mVis) * (want > mVis ? 0.28 : 0.1)
+        mouthG.setAttribute('opacity', mVis.toFixed(3))
+        if (mVis < 0.02) return
+        // four shapes, blended by the sound itself: bright audio pulls WIDE
+        // (corners out, shallow — "ee"), dark audio pulls ROUND (small "o"),
+        // loud mids drop the jaw OPEN ("ah"), silence closes it
+        const wide = Math.min(1, Math.max(0, (mHiS - 0.16) * 3.2))
+        const round = Math.min(1, Math.max(0, (mLoS - 0.48) * 2.6))
+        const w = (11.5 - mOpen * 3.2) * (1 + wide * 0.35 - round * 0.42)
+        const d = (1.6 + mOpen * 15) * (1 - wide * 0.45 + round * 0.12)
+        const tc = 1.6 - wide * 1.1
+        mouthPath.setAttribute(
+          'd',
+          `M ${-w.toFixed(2)} 0 Q 0 ${tc.toFixed(2)} ${w.toFixed(2)} 0` +
+            ` Q ${w.toFixed(2)} ${d.toFixed(2)} 0 ${d.toFixed(2)}` +
+            ` Q ${-w.toFixed(2)} ${d.toFixed(2)} ${-w.toFixed(2)} 0 Z`
+        )
+        if (eyeEls.length === 2 && eyeEls[0].isConnected) {
+          const l = TR.exec(eyeEls[0].getAttribute('transform') || '')
+          const r = TR.exec(eyeEls[1].getAttribute('transform') || '')
+          if (l && r) {
+            const midX = (+l[1] + +r[1]) / 2
+            const midY = (+l[2] + +r[2]) / 2
+            mBaseY += (midY - mBaseY) * 0.012
+            const sinYaw = Math.max(-0.9, Math.min(0.9, midX / 41))
+            const cosYaw = Math.sqrt(1 - sinYaw * sinYaw)
+            const sinPitch = Math.max(-0.9, Math.min(0.9, -(midY - mBaseY) / (41 * cosYaw)))
+            const cosPitch = Math.sqrt(1 - sinPitch * sinPitch)
+            // the library's project() for the mouth anchor (0, 20), r = 46
+            const pz = Math.sqrt(46 * 46 - 20 * 20)
+            const x1 = pz * sinYaw
+            const z1 = pz * cosYaw
+            const y = 20 * cosPitch - z1 * sinPitch
+            const z2 = 20 * sinPitch + z1 * cosPitch
+            const squash = Math.max(0.25, Math.min(1, z2 / pz))
+            const phi = ((Math.atan2(y, x1) * 180) / Math.PI).toFixed(1)
+            mouthG.setAttribute(
+              'transform',
+              `translate(${x1.toFixed(2)} ${y.toFixed(2)}) rotate(${phi}) scale(${squash.toFixed(3)} 1) rotate(${-phi})`
+            )
+          }
+        }
+      }
+
+      // --- aura: glow, drifting ring, or orbiting particles, in ink ---
+      function renderAura() {
+        const svgEl = faceEl.querySelector('svg')
+        const headGroup = svgEl?.getElementsByTagName('g')[0]
+        if (!headGroup) return
+        svgEl.style.overflow = 'visible'
+        headGroup.querySelector(':scope > .bwa')?.remove()
+        if (!cfg.aura || cfg.aura === 'none') return
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+        g.setAttribute('class', 'bwa')
+        g.style.fill = 'var(--aura-color)'
+        g.style.stroke = 'var(--aura-color)'
+        g.style.pointerEvents = 'none'
+        if (cfg.aura === 'glow') {
+          g.innerHTML =
+            '<circle r="46" fill="none" stroke-width="7" opacity="0.3" style="filter: blur(3px)"/>'
+        } else if (cfg.aura === 'ring') {
+          // SMIL rotate about (0,0): orbits the face centre no matter what
+          // transforms the head group carries
+          g.innerHTML =
+            '<g><circle r="53" fill="none" stroke-width="2.2" stroke-dasharray="6 7" opacity="0.55"/>' +
+            '<animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="26s" repeatCount="indefinite"/></g>'
+        } else if (cfg.aura === 'particles') {
+          // an emitter, not an orbit: each mote is born at the rim, drifts
+          // out and up like an ember, fades through its lifetime, respawns.
+          // Varied lifespans and staggered phases keep the loop invisible.
+          let s = ''
+          for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2 + (i % 3) * 0.35
+            const r0 = 47 + (i % 3) * 2
+            const x0 = (r0 * Math.cos(a)).toFixed(1)
+            const y0 = (r0 * Math.sin(a)).toFixed(1)
+            const drift = 9 + (i % 4) * 3
+            const dx = (Math.cos(a) * drift).toFixed(1)
+            const dy = (Math.sin(a) * drift - 5).toFixed(1) // embers rise
+            const size = (1.1 + (i % 3) * 0.5).toFixed(2)
+            const dur = (2.6 + (i % 5) * 0.55).toFixed(2)
+            const begin = (-((i * 0.7) % 4)).toFixed(2)
+            s +=
+              `<g><circle cx="${x0}" cy="${y0}" r="${size}" stroke="none" opacity="0">` +
+              `<animate attributeName="opacity" values="0;0.85;0" keyTimes="0;0.3;1" dur="${dur}s" begin="${begin}s" repeatCount="indefinite"/>` +
+              `</circle>` +
+              `<animateTransform attributeName="transform" type="translate" from="0 0" to="${dx} ${dy}" dur="${dur}s" begin="${begin}s" repeatCount="indefinite"/></g>`
+          }
+          g.innerHTML = s
+        }
+        headGroup.appendChild(g)
       }
 
       // --- lighting: a shaded sphere, a cursor-chasing glint, and a ground
       // shadow that reacts to how high he's bouncing ---
       const ground = document.querySelector('#ground')
       let headGroupEl = null
+      let extrasRaf = null // the scene frame loop's rAF handle
       function renderLighting() {
         const svgEl = faceEl.querySelector('svg')
         const defs = svgEl?.querySelector('defs')
@@ -294,15 +464,49 @@
         ground.style.transform = `translateX(calc(-50% + ${(htx * 0.6).toFixed(1)}vmin)) scaleX(${Math.max(0.55, 1 - lift / 55).toFixed(3)})`
         ground.style.opacity = Math.max(0.25, 1 - lift / 30).toFixed(2)
 
+        // lip-sync: live loudness drives the head jiggle and our talking mouth
+        let level = 0
+        if (analyser) {
+          analyser.getByteTimeDomainData(analyserData)
+          let sum = 0
+          for (let i = 0; i < analyserData.length; i++) {
+            const d = (analyserData[i] - 128) / 128
+            sum += d * d
+          }
+          const rms = Math.sqrt(sum / analyserData.length)
+          // noise gate, then a gentler curve: conversation sits mid-range,
+          // only genuinely loud syllables hit full open
+          level = rms < 0.015 ? 0 : Math.min(1, Math.pow(rms * 5, 1.1))
+          // spectral colour → mouth shape: treble share reads as "ee",
+          // bass share as "oo" (bins are ~94Hz wide at 48kHz)
+          if (level > 0) {
+            analyser.getByteFrequencyData(analyserFreq)
+            let lo = 0
+            let mid = 0
+            let hi = 0
+            for (let i = 1; i < 8; i++) lo += analyserFreq[i] // ~100-750Hz
+            for (let i = 8; i < 20; i++) mid += analyserFreq[i] // ~750-1900Hz
+            for (let i = 20; i < 44; i++) hi += analyserFreq[i] // ~1.9-4.1kHz
+            const total = lo + mid + hi || 1
+            mHiS += (hi / total - mHiS) * 0.35
+            mLoS += (lo / total - mLoS) * 0.35
+          }
+        }
+        face?.talk?.(level)
+        updateMouth(level)
+
       }
 
       window.widget.onCfg((c) => {
         activity()
-        const rebuild = c.pupils !== cfg.pupils
+        const rebuild = c.pupils !== cfg.pupils || c.voiceMode !== cfg.voiceMode
         cfg = c
         applyColors()
         if (rebuild) buildFace()
-        else face.setExpression(restMood())
+        else {
+          renderAura()
+          face.setExpression(restMood())
+        }
       })
       window.widget.onReact((name) => (activity(), face.react(name)))
 
@@ -327,7 +531,10 @@
       faceEl.addEventListener('pointerup', () => {
         if (!pressing) return
         if (pressing.moved) window.widget.moveEnd()
-        else window.widget.toggleChat()
+        else {
+          window.widget.voiceStop() // clicking him always shuts him up
+          window.widget.toggleChat()
+        }
         pressing = null
       })
       faceEl.addEventListener('lostpointercapture', () => {
@@ -437,15 +644,29 @@
       let sentencePos = 0 // words since the sentence began — pitch declines
       let wordBuf = '' // partial word carried between deltas
 
+      let analyser = null
+      let analyserData = null
+      let analyserFreq = null
+      let elBus = null
+      let mHiS = 0 // smoothed treble share of the voice — "ee"-ness
+      let mLoS = 0 // smoothed bass share — "oo"-ness
       function voiceInit() {
         vctx = new AudioContext()
+        // everything audible flows through the analyser so the mouth can watch it
+        analyser = vctx.createAnalyser()
+        analyser.fftSize = 512
+        analyserData = new Uint8Array(analyser.fftSize)
+        analyserFreq = new Uint8Array(analyser.frequencyBinCount)
+        analyser.connect(vctx.destination)
+        elBus = vctx.createGain() // EL voice: full-range, no babble lowpass
+        elBus.connect(analyser)
         master = vctx.createGain()
         master.gain.value = 0.9
         const lp = vctx.createBiquadFilter()
         lp.type = 'lowpass'
         lp.frequency.value = 3200
         master.connect(lp)
-        lp.connect(vctx.destination)
+        lp.connect(analyser)
         noiseBuf = vctx.createBuffer(1, Math.round(vctx.sampleRate * 0.1), vctx.sampleRate)
         const d = noiseBuf.getChannelData(0)
         for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1
@@ -624,6 +845,64 @@
         }
       }, 10000)
 
+      // --- ElevenLabs playback: raw 24kHz mono PCM chunks, queued gaplessly.
+      // Bypasses the babble's lowpass chain — a real voice shouldn't be muffled.
+      let elTime = 0
+      let elSources = []
+      let elStarted = false
+      window.widget.onElAudio(({ b64, done, stop }) => {
+        if (stop) {
+          for (const s of elSources) {
+            try {
+              s.stop()
+            } catch {}
+          }
+          elSources = []
+          elTime = 0
+          elStarted = false
+          return
+        }
+        if (done) {
+          // report when the last scheduled chunk actually finishes playing
+          const wait = vctx ? Math.max(0, elTime - vctx.currentTime) * 1000 + 60 : 0
+          setTimeout(() => {
+            elStarted = false
+            window.widget.elMark({ ended: true })
+          }, wait)
+          return
+        }
+        if (!b64) return
+        try {
+          if (!vctx) voiceInit()
+        } catch {
+          return
+        }
+        const bin = atob(b64)
+        const n = bin.length >> 1
+        if (!n) return
+        const buf = vctx.createBuffer(1, n, 24000)
+        const ch = buf.getChannelData(0)
+        for (let i = 0; i < n; i++) {
+          let v = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8)
+          if (v >= 32768) v -= 65536
+          ch[i] = v / 32768
+        }
+        const src = vctx.createBufferSource()
+        src.buffer = buf
+        src.connect(elBus)
+        const now = vctx.currentTime
+        if (elTime < now + 0.06) elTime = now + 0.06
+        src.start(elTime)
+        if (!elStarted) {
+          elStarted = true
+          const delay = Math.max(0, elTime - now) * 1000 + 30
+          setTimeout(() => window.widget.elMark({ started: true }), delay)
+        }
+        elTime += buf.duration
+        elSources.push(src)
+        src.onended = () => (elSources = elSources.filter((s) => s !== src))
+      })
+
       // --- a bot reached out: peep bubble up and perk up ---
       const peep = document.querySelector('#peep')
       let peepTimer = null
@@ -689,6 +968,7 @@
 
       applyColors()
       buildFace()
+
     </script>
   </body>
 </html>

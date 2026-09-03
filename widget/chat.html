@@ -292,6 +292,22 @@
       #input::placeholder {
         color: #6d757c;
       }
+      /* anchored BELOW the bot: input on top (adjacent to him, and it stays
+         put while the window grows downward), conversation flowing beneath */
+      body.below #wrap {
+        flex-direction: column-reverse;
+      }
+      body.below #log > :first-child {
+        margin-top: 0;
+      }
+      body.below .bot.tailed::after {
+        display: none;
+      }
+      /* feed hidden: just the entry box — messages still collect underneath */
+      body.nofeed #log,
+      body.nofeed #bar {
+        display: none;
+      }
     </style>
   </head>
   <body>
@@ -320,7 +336,15 @@
         log.style.setProperty('--ring', lum(cfg.skin) > 0.5 ? 'rgba(0,0,0,.3)' : '#2f3336')
       }
       applyVars()
-      window.widget.onCfg((c) => ((cfg = c), applyVars()))
+      const applyFeed = () => document.body.classList.toggle('nofeed', cfg.showFeed === false)
+      applyFeed()
+      window.widget.onCfg((c) => {
+        cfg = c
+        applyVars()
+        applyFeed()
+        lastH = 0
+        report(true)
+      })
 
       // --- markdown: fences and inline code protected first, then inline
       // styles + autolinked bare URLs, then a line-based block pass
@@ -455,7 +479,9 @@
       // 16px wrap padding + one 6px gap per visible sibling + a 2px buffer;
       // undercounting here clips the last line of long messages
       const contentH = () =>
-        log.scrollHeight + bar.offsetHeight + row.offsetHeight + 18 + (bar.hidden ? 6 : 12)
+        cfg.showFeed === false
+          ? row.offsetHeight + 18
+          : log.scrollHeight + bar.offsetHeight + row.offsetHeight + 18 + (bar.hidden ? 6 : 12)
       function report(force) {
         const want = Math.min(600, contentH())
         if (streaming && !force && want <= lastH) return // never shrink mid-stream
@@ -556,7 +582,10 @@
       }
       input.addEventListener('input', grow)
       input.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') return window.widget.closeChat()
+        if (e.key === 'Escape') {
+          window.widget.voiceStop()
+          return window.widget.closeChat()
+        }
         if (e.key !== 'Enter' || e.shiftKey) return
         e.preventDefault()
         const text = input.value.trim()
@@ -596,6 +625,26 @@
         input.focus()
       }
 
+      // voice-paced turns: hold until speech starts, then reveal at talking speed
+      let pace = 'text'
+      let voiceStarted = false
+      let voiceEnded = false
+      let firstDeltaAt = 0
+      window.widget.onChatPace(({ mode }) => {
+        pace = mode
+        voiceStarted = false
+        voiceEnded = false
+        firstDeltaAt = 0
+      })
+      window.widget.onVoiceMark(({ started, ended }) => {
+        if (started) voiceStarted = true
+        if (ended) {
+          voiceEnded = true
+          voiceStarted = true
+        }
+        startReveal()
+      })
+
       function startReveal() {
         if (revealTimer) return
         revealTimer = setInterval(() => {
@@ -605,9 +654,18 @@
             if (finalPending !== null) finishStream()
             return
           }
-          // chars/sec: reading pace normally, gentle catch-up on bursts
-          const cps =
-            finalPending !== null ? 1200 : Math.min(900, Math.max(60, streamQueue.length * 0.8))
+          // a voiced turn waits for the audio (with a safety valve), then
+          // reveals at speaking pace until the voice is done
+          const voicing = pace === 'voice' && !voiceEnded
+          if (voicing && !voiceStarted) {
+            if (performance.now() - firstDeltaAt < 4000) return // hold for audio
+            voiceStarted = true // audio never came; carry on without it
+          }
+          const cps = voicing
+            ? 15.5
+            : finalPending !== null
+              ? 1200
+              : Math.min(900, Math.max(60, streamQueue.length * 0.8))
           const n = Math.max(1, Math.round(cps * 0.03))
           ensureStreamBubble().textContent += streamQueue.slice(0, n)
           streamQueue = streamQueue.slice(n)
@@ -620,6 +678,7 @@
         streaming = true
         clearTyping()
         ensureStreamBubble()
+        if (!firstDeltaAt) firstDeltaAt = performance.now()
         streamQueue += text
         startReveal()
       })
@@ -682,6 +741,11 @@
         report(true)
         stick(true)
         input.focus()
+      })
+
+      window.widget.onChatOrient(({ below }) => {
+        document.body.classList.toggle('below', below)
+        stick(true)
       })
 
       window.widget.onChatFocus(() => input.focus())
