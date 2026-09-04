@@ -1,6 +1,6 @@
 {
   "name": "@bwnd/bbot",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "A small, friendly animated face for web pages. Eyes that follow your cursor, 30 moods, 9 reactions. 3.7 kB, no dependencies.",
   "type": "module",
   "license": "MIT",
@@ -11,7 +11,9 @@
     "./face.css": "./dist/face.css",
     "./core": "./src/core.js",
     "./expressions": "./src/expressions.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./fx": "./dist/fx.js",
+    "./talk": "./dist/talk.js"
   },
   "files": [
     "dist",

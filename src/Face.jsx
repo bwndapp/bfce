@@ -46,6 +46,7 @@ const Face = forwardRef(function Face(
     react: (name, options) => face.current?.react(name, options),
     setExpression: (name) => face.current?.setExpression(name),
     look: (x, y, ms) => face.current?.look(x, y, ms),
+    talk: (level) => face.current?.talk(level),
   }), [])
 
   return (

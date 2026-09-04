@@ -7,7 +7,7 @@
 **A small, friendly face you can drop into a web page.**
 
 It follows your cursor, blinks on its own, and glances around when you leave it
-alone. 30 moods, nine one-shot reactions, **3.7 kB gzipped**, no dependencies.
+alone. 30 moods, nine one-shot reactions, **4.8 kB gzipped**, no dependencies.
 
 ### [→ Try it live at bbot.bwnd.app](https://bbot.bwnd.app)
 
@@ -178,10 +178,60 @@ shake automatically — don't add your own guard.
 
 ## Size
 
+The stylesheet is injected by the bundle, so these are whole numbers — there is
+nothing else to add.
+
 | | minified | gzipped |
 |---|---|---|
-| `createFace` + CSS (no framework) | 9.1 kB | **3.7 kB** |
-| `<Face>` + CSS (React external) | 9.7 kB | **4.1 kB** |
+| `createFace` (no framework) | 13.4 kB | **4.8 kB** |
+| `<Face>` (React external) | 14.2 kB | **5.2 kB** |
+| `@bwnd/bbot/fx` (optional) | 15.9 kB | 4.9 kB |
+| `@bwnd/bbot/talk` (optional) | 1.9 kB | 1.0 kB |
+
+The last two are separate entry points and cost nothing unless you import
+them.
+
+## Effects
+
+`@bwnd/bbot/fx` adds a finish: ten independent knobs, each 0–1, composable.
+
+```js
+import { createFace } from '@bwnd/bbot'
+import { applyFx } from '@bwnd/bbot/fx'
+
+const face = createFace(document.querySelector('#bot'))
+const fx = applyFx(document.querySelector('#bot svg'), { chrome: 0.9, gloss: 0.8 })
+fx.set({ bloom: 0.6 })   // change any knob at any time
+```
+
+`gloss` (catchlights), `rim` (a neon tube), `chrome` (a reflected room),
+`glass` (the body thins and the ink splits chromatically), `bloom` (a tight
+burn), `halation` (a wide film bleed), `holo`, `scan` (scanlines), `scratch`
+(a worn clearcoat) and `hue` (a slow drift).
+
+Layers are built lazily, so a knob you leave at 0 costs nothing. `chrome` and
+`scratch` are the expensive two; the rest are close to free.
+
+## Talking
+
+`@bwnd/bbot/talk` points a face at audio and lets it lip-sync. The face already
+knows how to talk — `face.talk(level)` takes a 0–1 loudness — this is the half
+that listens.
+
+```js
+import { listen } from '@bwnd/bbot/talk'
+
+const face = createFace(el, { mouth: true })
+const stop = listen(document.querySelector('audio'), face)
+```
+
+`listen` takes an `<audio>`/`<video>`, a `MediaStream` (a mic, a WebRTC track)
+or an `AudioNode` you have already wired up, and returns a `stop()`.
+
+For rendering rather than playback there is `levelAt(audioBuffer, time)`, which
+reads the level straight off decoded samples. Sync then follows the frame's own
+timestamp rather than whatever the sound card is doing, which is exact even if
+the encoder stutters — and it works where there is no audio device at all.
 
 ## For agents
 

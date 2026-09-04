@@ -4,6 +4,7 @@
 //
 //   dist/face.js   the library, no framework, styles injected at runtime
 //   dist/react.js  the same plus the <Face> component, react external
+//   dist/fx.js     the optional effect stack — chrome, glass, neon rim, wear
 //   dist/face.css  standalone stylesheet, for anyone importing raw src/
 //
 // Both JS bundles inject their own styles, which is why `import '@bwnd/bbot'`
@@ -13,7 +14,7 @@
 // node_modules — which is most of them.
 
 import { build } from 'esbuild'
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 
 const css = readFileSync('src/face.css', 'utf8')
 
@@ -51,6 +52,12 @@ export function createFace(host, options) {
 }
 
 export { EXPRESSIONS, EXPRESSION_NAMES, REACTIONS, REACTION_NAMES } from './src/expressions.js'
+`,
+  '.build-fx.js': `
+export { applyFx, FX_DEFAULTS, default } from './src/fx.js'
+`,
+  '.build-talk.js': `
+export { listen, levelAt, default } from './src/talk.js'
 `,
   '.build-react.js': `
 ${INJECT}
@@ -91,9 +98,11 @@ try {
     outfile: 'dist/react.js',
     external: ['react', 'react-dom', 'react/jsx-runtime'],
   })
+  await build({ ...common, entryPoints: ['.build-fx.js'], outfile: 'dist/fx.js' })
+  await build({ ...common, entryPoints: ['.build-talk.js'], outfile: 'dist/talk.js' })
   await build({ entryPoints: ['src/face.css'], minify: true, outfile: 'dist/face.css' })
 } finally {
   for (const entry of Object.keys(entries)) rmSync(entry, { force: true })
 }
 
-console.log('built dist/face.js, dist/react.js and dist/face.css')
+console.log('built ' + readdirSync('dist').sort().map((f) => 'dist/' + f).join(', '))

@@ -174,8 +174,14 @@ export function createFace(host, options = {}) {
   // Features live inside the silhouette. At full gaze a `surprised` eye lands
   // within a unit of the rim, so without this the geometry only stays inside by
   // luck — and anything that widens the eyes or the turn would break it.
+  // Two groups, not one: SVG clips *after* it filters, so a glow set on the
+  // clipped group gets shaved off at the rim and never reaches the page. The
+  // outer group carries the fx filter and the inner one does the clipping, so
+  // the features stay inside the head and their light still spills out of it.
+  const skinFx = svg('g', { class: 'bwf-fx' })
   const skin = svg('g', { 'clip-path': `url(#${clipId}-head)` })
-  headGroup.appendChild(skin)
+  skinFx.appendChild(skin)
+  headGroup.appendChild(skinFx)
 
   const eyesGroup = svg('g', {})
   const eyes = [-1, 1].map((side) => {
