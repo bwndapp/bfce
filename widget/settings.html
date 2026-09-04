@@ -749,7 +749,187 @@
         border-color: var(--accent);
         box-shadow: 0 0 0 3px var(--accent-soft);
       }
-      /* config pane */
+      /* config pane: the MCP panel */
+      .mcp-card {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--line-strong);
+        border-radius: 12px;
+        padding: 12px 14px 13px;
+      }
+      .mcp-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .mcp-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.22);
+        flex: none;
+      }
+      .mcp-dot.live {
+        background: #5dd39e;
+        box-shadow: 0 0 8px #5dd39e;
+      }
+      .mcp-dot.waiting {
+        background: #ffd166;
+        animation: pulse 1s infinite;
+      }
+      .mcp-name {
+        font: 500 12.5px ui-monospace, Consolas, monospace;
+        letter-spacing: 0.01em;
+      }
+      .mcp-state {
+        font-size: 10.5px;
+        color: var(--dim);
+        padding: 3px 9px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.07);
+        letter-spacing: 0.02em;
+      }
+      .mcp-state.live {
+        color: #9fe8c4;
+        background: rgba(93, 211, 158, 0.14);
+      }
+      .mcp-line {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--text);
+      }
+      .mcp-sub {
+        font-size: 10.5px;
+        line-height: 1.5;
+        color: var(--dim);
+        margin-top: 3px;
+      }
+      /* the roster: a quiet list, a hairline between rows, room to read */
+      .tools {
+        display: flex;
+        flex-direction: column;
+      }
+      .tool {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 3px 12px;
+        align-items: baseline;
+        padding: 9px 2px;
+        border-top: 1px solid var(--line);
+      }
+      .tool:first-child {
+        border-top: none;
+        padding-top: 2px;
+      }
+      .tool.dim {
+        opacity: 0.5;
+      }
+      .tool .tname {
+        font: 500 12px ui-monospace, Consolas, monospace;
+      }
+      .tool .tuse {
+        font-size: 10.5px;
+        color: var(--dim);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .tool .tuse b {
+        color: var(--text);
+        font-weight: 500;
+      }
+      .tool .tdesc {
+        grid-column: 1 / -1;
+        font-size: 11px;
+        color: var(--dim);
+        line-height: 1.5;
+      }
+      .tlog {
+        display: flex;
+        flex-direction: column;
+        max-height: 176px;
+        overflow-y: auto;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+      }
+      .tlog:empty {
+        border-style: dashed;
+        padding: 12px 14px;
+      }
+      .tlog:empty::before {
+        content: 'nothing yet — every call the bot makes on this machine lands here';
+        color: var(--dim);
+        font-size: 11px;
+        line-height: 1.5;
+      }
+      .tl {
+        display: grid;
+        grid-template-columns: 48px 1fr auto;
+        gap: 10px;
+        align-items: baseline;
+        padding: 7px 12px;
+        border-top: 1px solid var(--line);
+      }
+      .tl:first-child {
+        border-top: none;
+      }
+      .tl .tt {
+        color: var(--dim);
+        font-size: 10.5px;
+        font-variant-numeric: tabular-nums;
+      }
+      .tl .ts {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 11.5px;
+      }
+      .tl .tm {
+        color: var(--dim);
+        font-size: 10.5px;
+        font-variant-numeric: tabular-nums;
+      }
+      .tl.bad .ts {
+        color: #ffb3b8;
+      }
+      .roots {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        margin-bottom: 10px;
+      }
+      .root {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--line-strong);
+        border-radius: 9px;
+        padding: 7px 7px 7px 11px;
+        font: 11px ui-monospace, Consolas, monospace;
+        color: var(--text);
+      }
+      .root > span {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        direction: rtl;
+        text-align: left;
+      }
+      .root > button {
+        flex: none;
+        padding: 2px 7px;
+        font-size: 11px;
+        opacity: 0.7;
+      }
+      .root > button:hover {
+        opacity: 1;
+      }
+      .roots:empty::before {
+        content: 'no folders — the bot can see nothing';
+        color: var(--dim);
+        font-size: 11px;
+      }
       .field-input {
         flex: 1;
         box-sizing: border-box;
@@ -940,6 +1120,7 @@
             <div id="subtabs2">
               <button class="stab active" data-sub2="bwnd">bwnd</button>
               <button class="stab" data-sub2="el">elevenlabs</button>
+              <button class="stab" data-sub2="desktop">mcp</button>
               <button class="stab" data-sub2="app">app</button>
             </div>
             <div class="sub" id="sub2-bwnd">
@@ -967,6 +1148,41 @@
                   powers real voices — pick the engine and a voice per bot in
                   style → voice. Billed per character by ElevenLabs.
                 </div>
+              </section>
+            </div>
+            <div class="sub" id="sub2-desktop" hidden>
+              <section>
+                <h2>MCP server</h2>
+                <div class="mcp-card">
+                  <div class="mcp-head">
+                    <span class="mcp-dot" id="mcpDot"></span>
+                    <span class="mcp-name">bbot-desktop</span>
+                    <span class="mcp-state" id="mcpState">off</span>
+                    <span style="flex: 1"></span>
+                    <label class="toggle"><input type="checkbox" id="desktopTools" /></label>
+                  </div>
+                  <div class="mcp-line" id="mcpLine"></div>
+                  <div class="mcp-sub" id="mcpSub">over the bwnd socket, in reverse — no ports, no tunnel</div>
+                </div>
+              </section>
+              <section>
+                <h2>Tools it exposes</h2>
+                <div id="toolList" class="tools"></div>
+              </section>
+              <section>
+                <h2>Folders it can see</h2>
+                <div id="rootList" class="roots"></div>
+                <div class="conn-row">
+                  <span class="hint" style="flex: 1">read-only: search, list, read text, open. Nothing outside these.</span>
+                  <button id="addRoot">add folder…</button>
+                </div>
+                <div class="hint" style="margin-top: 6px">
+                  what it reads goes to the bot's container to be understood — keep private folders out
+                </div>
+              </section>
+              <section>
+                <h2>Activity</h2>
+                <div id="toolLog" class="tlog"></div>
               </section>
             </div>
             <div class="sub" id="sub2-app" hidden>
@@ -1235,7 +1451,7 @@
           return
         }
         if (elLoadedForKey === cfg.elKey) {
-          if (sel.querySelector(`option[value="${cfg.elVoice}"]`)) sel.value = cfg.elVoice
+          syncElVoice([...sel.options].map((o) => o.value))
           return
         }
         $('#elHint').textContent = 'loading voices…'
@@ -1252,19 +1468,27 @@
           o.textContent = v.name
           sel.appendChild(o)
         }
-        if (r.voices.some((v) => v.id === cfg.elVoice)) sel.value = cfg.elVoice
-        else if (r.voices.length) window.widget.setCfg({ elVoice: r.voices[0].id })
+        syncElVoice(r.voices.map((v) => v.id))
         $('#elHint').textContent = `${r.voices.length} voices on this account — picked per bot`
+      }
+      // the dropdown and the saved id must never disagree: a select always
+      // shows *some* option, so an empty or stale saved id gets the shown one
+      function syncElVoice(ids) {
+        const sel = $('#elVoiceSel')
+        if (!ids.length) return
+        if (ids.includes(cfg.elVoice)) sel.value = cfg.elVoice
+        else window.widget.setCfg({ elVoice: ids[0] })
       }
       $('#elVoiceSel').addEventListener('change', () => window.widget.setCfg({ elVoice: $('#elVoiceSel').value }))
       renderVoiceMode()
       loadElVoices()
 
-      // --- presets: full looks. A look is EVERY style key — colours, pupils,
-      // aura, voice, and each fx slider — so applying one is a clean slate,
-      // not a tint over whatever was there. Built-ins list only what differs
-      // from the defaults; the rest resets ---
-      const LOOK_KEYS = () => (cfg.styleKeys || []).filter((k) => k !== 'mood') // mood is a state, not a look
+      // --- presets: full looks. A look is every look key the main process
+      // hands us (cfg.lookKeys: colours, pupils, aura, pitch, each fx slider —
+      // never mood, the voice engine or the ElevenLabs voice), so applying
+      // one is a clean slate, not a tint over whatever was there. Built-ins
+      // list only what differs from the defaults; the rest resets ---
+      const LOOK_KEYS = () => cfg.lookKeys || []
       const fullLook = (style) => {
         const look = {}
         for (const k of LOOK_KEYS()) look[k] = k in style ? style[k] : (cfg.styleDefaults || {})[k]
@@ -1356,7 +1580,7 @@
             if (e.key === 'Escape') finish(false)
           })
           inp.addEventListener('blur', () => finish(true))
-        }, 'save the current look — colours, aura, voice, every fx slider — as a preset')
+        }, 'save the current look — colours, aura, pitch, every fx slider — as a preset')
         saver.classList.add('saver')
         for (const [i, p] of (cfg.presets || []).entries()) {
           const b = card(p.name, p.style, () => window.widget.setCfg(fullLook(p.style)), 'right-click to delete', p.style)
@@ -1479,6 +1703,112 @@
       $('#autostart').checked = await window.widget.getAutostart()
       $('#autostart').addEventListener('change', (e) => window.widget.setAutostart(e.target.checked))
 
+      // --- desktop tools ---
+      $('#desktopTools').addEventListener('change', (e) => window.widget.setCfg({ desktopTools: e.target.checked }))
+      $('#addRoot').addEventListener('click', async () => {
+        const dir = await window.widget.pickFolder()
+        if (dir && !(cfg.toolRoots || []).includes(dir)) window.widget.setCfg({ toolRoots: [...(cfg.toolRoots || []), dir] })
+      })
+      // the MCP panel: server state + roster + activity, pushed live from main
+      let toolState = await window.widget.getToolState()
+      window.widget.onToolState((st) => ((toolState = st), renderMcp()))
+      const ago = (t) => {
+        if (!t) return 'never'
+        const s = Math.max(0, Math.round((Date.now() - t) / 1000))
+        return s < 5 ? 'just now' : s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)}m ago` : `${Math.round(s / 3600)}h ago`
+      }
+      const clock = (t) => new Date(t).toTimeString().slice(0, 8)
+      // what each tool does, in a line — the agent gets the long version
+      const TOOL_BLURB = {
+        search_files: 'find files by name or glob, newest first, with an age filter',
+        list_dir: 'list a folder, or the folders it\'s allowed to see',
+        read_file: 'read the start of a text file; binaries report size only',
+        open_path: 'open with the default app, or reveal in the file manager',
+      }
+      function renderMcp() {
+        const st = toolState
+        const live = st.on && st.bridge === 'on' && st.announcedAt > 0
+        const waiting = st.on && !live
+        $('#mcpDot').className = 'mcp-dot' + (live ? ' live' : waiting ? ' waiting' : '')
+        $('#mcpState').className = 'mcp-state' + (live ? ' live' : '')
+        $('#mcpState').textContent = !st.on
+          ? 'off'
+          : live
+            ? 'serving'
+            : st.bridge === 'on'
+              ? 'announcing'
+              : st.bridge === 'connecting'
+                ? 'waiting'
+                : 'offline'
+        const who = st.incubators.length ? st.incubators.join(', ') : 'whichever bot binds first'
+        $('#mcpLine').textContent = !st.on
+          ? 'Off. The bot only chats — switch on to let it find files here and hand you paths.'
+          : live
+            ? `Serving ${st.tools.length} tools to ${who}. Announced ${ago(st.announcedAt)}.`
+            : st.bridge === 'on'
+              ? `Connected — ${st.tools.length} tools go out to ${who} on the next hello.`
+              : `On. ${st.tools.length} tools will be offered to ${who} once bwnd connects.`
+        const list = $('#toolList')
+        list.replaceChildren()
+        for (const t of st.tools) {
+          const row = document.createElement('div')
+          row.className = 'tool' + (st.on ? '' : ' dim')
+          const n = document.createElement('span')
+          n.className = 'tname'
+          n.textContent = t.name
+          const u = document.createElement('span')
+          u.className = 'tuse'
+          u.innerHTML = t.count
+            ? `<b>${t.count}</b> call${t.count === 1 ? '' : 's'}${t.errors ? `, ${t.errors} refused` : ''} · ${ago(t.lastAt)}`
+            : 'unused'
+          const d = document.createElement('span')
+          d.className = 'tdesc'
+          d.textContent = TOOL_BLURB[t.name] || t.description
+          d.title = t.description // the full text the agent sees
+          row.append(n, u, d)
+          list.appendChild(row)
+        }
+        const log = $('#toolLog')
+        log.replaceChildren()
+        for (const e of st.log) {
+          const row = document.createElement('div')
+          row.className = 'tl' + (e.error ? ' bad' : '')
+          row.title = (e.incubator ? `${e.incubator} · ` : '') + (e.detail || e.summary)
+          const tt = document.createElement('span')
+          tt.className = 'tt'
+          tt.textContent = clock(e.at)
+          const ts = document.createElement('span')
+          ts.className = 'ts'
+          ts.textContent = e.summary
+          const tm = document.createElement('span')
+          tm.className = 'tm'
+          tm.textContent = e.error ? 'refused' : `${e.ms} ms`
+          row.append(tt, ts, tm)
+          log.appendChild(row)
+        }
+      }
+      setInterval(() => document.querySelector('#sub2-desktop:not([hidden])') && renderMcp(), 15000) // keep "ago" honest
+      function renderTools() {
+        $('#desktopTools').checked = !!cfg.desktopTools
+        renderMcp()
+        const list = $('#rootList')
+        list.replaceChildren()
+        for (const r of cfg.toolRoots || []) {
+          const row = document.createElement('div')
+          row.className = 'root'
+          const p = document.createElement('span')
+          p.textContent = r
+          p.title = r
+          const x = document.createElement('button')
+          x.textContent = '✕'
+          x.title = 'stop seeing this folder'
+          x.addEventListener('click', () => window.widget.setCfg({ toolRoots: cfg.toolRoots.filter((q) => q !== r) }))
+          row.append(p, x)
+          list.appendChild(row)
+        }
+      }
+      renderTools()
+
       // --- chat feed ---
       $('#showFeed').checked = cfg.showFeed !== false
       $('#showFeed').addEventListener('change', (e) => window.widget.setCfg({ showFeed: e.target.checked }))
@@ -1499,6 +1829,7 @@
         $('#voiceOn').checked = cfg.voice !== false
         for (const key of ['fxBloom', 'fxHalation', 'fxScan', 'fxChrome', 'fxHolo', 'fxHue', 'fxRim', 'fxGlass', 'fxGloss', 'fxScratch']) $('#' + key).value = (cfg[key] || 0) * 100
         $('#voicePitch').value = cfg.voicePitch || 1
+        renderTools()
         showRanges()
         refreshSelection()
       })

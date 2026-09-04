@@ -1,9 +1,10 @@
-const { app, BrowserWindow, Menu, screen, ipcMain, dialog } = require('electron')
+const { app, BrowserWindow, Menu, screen, ipcMain, dialog, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const brain = require('./brain')
 const bridge = require('./bridge')
 const { elStart } = require('./el')
+const tools = require('./tools')
 
 const SIZE = 180
 const CHAT_W = 320
@@ -17,6 +18,11 @@ const STYLE_KEYS = [
   'voiceMode', 'elVoice', 'fxBloom', 'fxHalation', 'fxScan',
   'fxChrome', 'fxHolo', 'fxHue', 'fxRim', 'fxGlass', 'fxGloss', 'fxScratch',
 ]
+// a *look* is the outfit a preset saves and applies: every style key except
+// mood (a state) and the voice engine + ElevenLabs voice (a choice made once
+// per bot). Applying a look must never silently drop a bot back to babble
+const NOT_A_LOOK = ['mood', 'voiceMode', 'elVoice']
+const LOOK_KEYS = STYLE_KEYS.filter((k) => !NOT_A_LOOK.includes(k))
 const STYLE_DEFAULTS = {
   skin: '#16181a',
   ink: '#e9ebec',
@@ -49,6 +55,8 @@ const GLOBAL_DEFAULTS = {
   elKey: '', // ElevenLabs API key (global)
   showFeed: true, // chat shows the conversation, or just the entry box
   captions: false, // closed captions under the bot while it speaks
+  desktopTools: false, // let the bot search/read/open files here, over the socket
+  toolRoots: tools.DEFAULT_ROOTS(), // the only folders those tools may touch
 }
 
 const cfgPath = () => path.join(app.getPath('userData'), 'widget-config.json')
@@ -125,11 +133,13 @@ const mergedCfg = (inst) => ({
   autoConnect: cfg.autoConnect,
   incubator: inst.incubator,
   presets: cfg.presets,
-  styleKeys: STYLE_KEYS, // so a saved look captures every style key, always
+  lookKeys: LOOK_KEYS, // the settings window saves/applies exactly these
   styleDefaults: STYLE_DEFAULTS,
   elKey: cfg.elKey,
   showFeed: cfg.showFeed,
   captions: cfg.captions,
+  desktopTools: cfg.desktopTools,
+  toolRoots: cfg.toolRoots,
 })
 
 function botOf(e) {
@@ -626,10 +636,16 @@ bridge.on('hello', ({ user, incubators }) => {
   // keep the primary's incubator valid; default to the first one
   const main = primary()
   if (incubators.length && main && !incubators.some((i) => i.id === main.incubator)) {
+    // the key no longer covers the saved incubator: say so, since the bot's
+    // whole identity (look, voice engine, voice) follows the incubator
+    const was = main.incubator
     main.incubator = incubators[0].id
     cfg.incubator = main.incubator
     save()
     broadcastCfg()
+    toChat(main, 'chat-error', {
+      text: `this key can't see ${was || 'the saved incubator'} — now standing in for ${incubators[0].name}`,
+    })
   }
   for (const w of BrowserWindow.getAllWindows()) {
     if (!w.isDestroyed()) w.webContents.send('hello', { user, incubators })
@@ -665,21 +681,15 @@ bridge.on('notify', async (n) => {
   toWin(inst, 'notify', { from: n.from || 'a bot', kind: n.kind })
   if (inst.chat && !inst.chat.isDestroyed() && inst.chat.isVisible()) openThread(inst)
   // yapping: a bot with a real voice speaks its DM out loud, unprompted
-  const style = styleFor(inst.incubator)
-  if (
-    style.voiceMode === 'el' &&
-    style.voice !== false &&
-    cfg.elKey &&
-    style.elVoice &&
-    !inst.el // never talk over an in-flight reply
-  ) {
+  const voiceId = inst.el ? null : await elVoiceFor(inst) // never talk over an in-flight reply
+  if (voiceId) {
     try {
       const h = await bridge.history(n.conversation_id)
       const lastMsg = [...(h.messages || [])].reverse().find((m) => m.role === 'assistant')
       const text = (lastMsg?.content || '').slice(0, 800)
       if (!text) return
       inst.conversationId = h.conversation_id // replies continue this thread
-      const el = elStart(cfg.elKey, style.elVoice, (a) => {
+      const el = elStart(cfg.elKey, voiceId, (a) => {
         toWin(inst, 'el-audio', a)
         if (a.done && inst.el === el) inst.el = null
       })
@@ -711,11 +721,15 @@ ipcMain.on('set-cfg', (e, patch) => {
   for (const k of STYLE_KEYS) {
     if (k in patch) cfg.bots[styleTarget] = { ...cfg.bots[styleTarget], [k]: patch[k] }
   }
-  for (const k of ['server', 'token', 'autoConnect', 'presets', 'elKey', 'showFeed', 'captions']) {
+  for (const k of ['server', 'token', 'autoConnect', 'presets', 'elKey', 'showFeed', 'captions', 'desktopTools', 'toolRoots']) {
     if (k in patch) cfg[k] = patch[k]
   }
+  if ('toolRoots' in patch)
+    cfg.toolRoots = [...new Set((cfg.toolRoots || []).map((r) => String(r).trim()).filter(Boolean))]
   save()
   broadcastCfg()
+  if ('desktopTools' in patch) bridge.setTools(cfg.desktopTools ? tools.manifest() : [])
+  if ('desktopTools' in patch || 'toolRoots' in patch) pushToolState()
   if ('captions' in patch && !patch.captions)
     for (const i of instances.values()) hideCaptions(i)
 })
@@ -798,11 +812,8 @@ ipcMain.on('chat-send', async (e, text) => {
   }
   toWin(inst, 'el-audio', { stop: true })
   // voice routing: an ElevenLabs session for this turn, or the babble path
-  const style = styleFor(inst.incubator)
-  const el =
-    style.voiceMode === 'el' && style.voice !== false && cfg.elKey && style.elVoice
-      ? elStart(cfg.elKey, style.elVoice, (a) => toWin(inst, 'el-audio', a))
-      : null
+  const voiceId = await elVoiceFor(inst)
+  const el = voiceId ? elStart(cfg.elKey, voiceId, (a) => toWin(inst, 'el-audio', a)) : null
   inst.el = el
   toChat(inst, 'chat-pace', { mode: el ? 'voice' : 'text' }) // reveal follows the voice
   try {
@@ -821,6 +832,7 @@ ipcMain.on('chat-send', async (e, text) => {
           else toWin(inst, 'speak', { text: ev.content })
         }
         if (ev.type === 'tool') toWin(inst, 'chat-state', { state: 'tool' })
+        if (ev.type === 'reasoning') think(inst, ev.content)
       },
       inst.conversationId
     )
@@ -849,6 +861,95 @@ ipcMain.on('chat-send', async (e, text) => {
   }
 })
 ipcMain.on('refresh-bots', () => bridge.refreshBots())
+ipcMain.handle('pick-folder', async (e) => {
+  const inst = botOf(e)
+  const r = await dialog.showOpenDialog(inst?.settings && !inst.settings.isDestroyed() ? inst.settings : undefined, {
+    properties: ['openDirectory'],
+    title: 'Let the bot see this folder',
+  })
+  return r.canceled ? null : r.filePaths[0]
+})
+
+// --- desktop tools: the bot's agent, in its container, calling back here.
+// Runs on this machine, scoped to cfg.toolRoots, answered over the socket.
+// The face focuses while it works and the chat logs what was done ---
+// the agent thinking out loud: the face acts the thought (a mood read from
+// the text, a thought cloud with its gist) and the chat's typing bubble
+// whispers it. Unprompted thoughts (a DM being worked on) go by incubator
+function think(inst, text) {
+  if (!text || !String(text).trim()) return
+  const th = brain.inferThought(text)
+  toWin(inst, 'chat-state', { state: 'reasoning', mood: th.mood, react: th.react, text: th.gist })
+  toChat(inst, 'chat-thought', { text: th.gist })
+}
+bridge.on('reasoning', ({ content, incubator_id }) => {
+  const inst =
+    [...instances.values()].find((i) => incubator_id && i.incubator === incubator_id) || primary()
+  think(inst, content)
+})
+
+// what the MCP panel in settings shows: is the server live, what it offers,
+// and what the bot has done with it. In-memory; a fresh launch starts clean
+const toolLog = [] // newest first, capped
+const toolStats = {} // name → { count, errors, lastAt }
+const TOOL_LOG_MAX = 40
+const toolState = () => ({
+  on: !!cfg.desktopTools,
+  bridge: bridge.status,
+  announcedAt: bridge.toolsAnnouncedAt || 0,
+  incubators: [...instances.values()].map((i) => i.incubator).filter(Boolean),
+  tools: tools.manifest().map((t) => ({ ...t, ...(toolStats[t.name] || { count: 0, errors: 0, lastAt: 0 }) })),
+  roots: cfg.toolRoots,
+  log: toolLog,
+})
+const pushToolState = () => {
+  const st = toolState()
+  for (const inst of instances.values())
+    if (inst.settings && !inst.settings.isDestroyed()) inst.settings.webContents.send('tool-state', st)
+}
+ipcMain.handle('get-tool-state', () => toolState())
+bridge.on('tools-announced', pushToolState)
+bridge.on('status', pushToolState)
+
+bridge.on('tool', async (req) => {
+  const inst =
+    [...instances.values()].find((i) => req.incubator_id && i.incubator === req.incubator_id) || primary()
+  const t0 = Date.now()
+  const record = (result) => {
+    const s = (toolStats[req.name] ||= { count: 0, errors: 0, lastAt: 0 })
+    s.count++
+    if (result.is_error) s.errors++
+    s.lastAt = t0
+    toolLog.unshift({
+      at: t0,
+      ms: Date.now() - t0,
+      name: req.name,
+      summary: tools.describe(req.name, req.input),
+      error: !!result.is_error,
+      detail: result.is_error ? result.content?.[0]?.text : undefined,
+      incubator: req.incubator_id || inst?.incubator || '',
+    })
+    toolLog.length = Math.min(toolLog.length, TOOL_LOG_MAX)
+    pushToolState()
+  }
+  if (!cfg.desktopTools) {
+    const off = { content: [{ type: 'text', text: 'desktop tools are switched off in the widget' }], is_error: true }
+    bridge.toolResult(req.id, off)
+    record(off)
+    return
+  }
+  toWin(inst, 'chat-state', { state: 'tool' })
+  const result = await tools.run(req.name, req.input, { roots: cfg.toolRoots, shell })
+  const { meta, ...wire } = result
+  bridge.toolResult(req.id, wire)
+  record(result)
+  toChat(inst, 'chat-note', {
+    text: (result.is_error ? "couldn't: " : '') + tools.describe(req.name, req.input),
+    error: !!result.is_error,
+  })
+  // back to thinking if a reply is still cooking, else at rest
+  toWin(inst, 'chat-state', { state: bridge.turn ? 'thinking' : 'end' })
+})
 ipcMain.on('reset-thread', (e) => {
   const inst = botOf(e)
   if (inst) inst.conversationId = null
@@ -876,7 +977,8 @@ ipcMain.on('caret', (e, p) => {
 ipcMain.on('el-mark', (e, m) => toChat(botOf(e), 'voice-mark', m))
 
 // --- ElevenLabs: list the account's voices for the picker ---
-ipcMain.handle('el-voices', async () => {
+let elVoiceCache = null // { key, ids } — the account's voices, per key
+async function elVoices() {
   if (!cfg.elKey) return { error: 'no key' }
   try {
     const res = await require('electron').net.fetch('https://api.elevenlabs.io/v1/voices', {
@@ -884,11 +986,34 @@ ipcMain.handle('el-voices', async () => {
     })
     if (!res.ok) return { error: res.status === 401 ? 'key rejected' : `error ${res.status}` }
     const j = await res.json()
-    return { voices: (j.voices || []).map((v) => ({ id: v.voice_id, name: v.name })) }
+    const voices = (j.voices || []).map((v) => ({ id: v.voice_id, name: v.name }))
+    elVoiceCache = { key: cfg.elKey, ids: voices.map((v) => v.id) }
+    return { voices }
   } catch (e) {
     return { error: e?.message || 'fetch failed' }
   }
-})
+}
+ipcMain.handle('el-voices', elVoices)
+
+// the voice to speak with, or null for the babble path. The saved id is
+// checked against the account (a swapped key leaves ids from the old one
+// behind); a bot on ElevenLabs with no usable voice yet borrows the account's
+// first voice and keeps it, rather than quietly babbling or erroring while
+// the settings say ElevenLabs
+async function elVoiceFor(inst) {
+  const style = styleFor(inst.incubator)
+  if (style.voiceMode !== 'el' || style.voice === false || !cfg.elKey) return null
+  if (elVoiceCache?.key !== cfg.elKey) await elVoices()
+  const ids = elVoiceCache?.key === cfg.elKey ? elVoiceCache.ids : null
+  if (style.elVoice && (!ids || ids.includes(style.elVoice))) return style.elVoice
+  const id = ids?.[0]
+  if (!id) return style.elVoice || null // can't check — speak with what we have
+  const target = inst.incubator || '_default'
+  cfg.bots[target] = { ...cfg.bots[target], elVoice: id }
+  save()
+  broadcastCfg()
+  return id
+}
 
 // --- start with the system: a login item pointing electron at this folder ---
 const loginItem = { path: process.execPath, args: [__dirname] }
@@ -974,6 +1099,7 @@ if (!app.requestSingleInstanceLock()) {
       offset += SIZE + 16
       spawnBot(id, { x: b.x + offset, y: b.y })
     }
+    bridge.setTools(cfg.desktopTools ? tools.manifest() : []) // announced on every hello
     if (cfg.autoConnect && cfg.server) bridge.connect(cfg.server, cfg.token)
   })
   app.on('window-all-closed', () => app.quit())

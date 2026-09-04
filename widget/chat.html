@@ -92,6 +92,32 @@
         border: 1px solid rgba(255, 107, 107, 0.5);
         font-size: 12px;
       }
+      /* the agent's thinking, whispered ahead of the dots */
+      .thought {
+        display: block;
+        font-style: italic;
+        font-size: 11.5px;
+        color: rgba(236, 239, 241, 0.6);
+        margin-bottom: 4px;
+        max-width: 34ch;
+      }
+      /* a desktop tool the bot used: what it did, in one quiet line */
+      .note {
+        align-self: flex-start;
+        background: rgba(255, 255, 255, 0.06);
+        color: rgba(236, 239, 241, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        font-size: 11.5px;
+        padding: 5px 10px;
+      }
+      .note::before {
+        content: '⌕ ';
+        opacity: 0.8;
+      }
+      .note.bad {
+        color: #ffcdd1;
+        border-color: rgba(255, 107, 107, 0.4);
+      }
       .bubble pre {
         background: rgba(0, 0, 0, 0.35);
         padding: 8px 10px;
@@ -572,6 +598,19 @@
         typing?.remove()
         typing = null
       }
+      // the agent's thinking, whispered in the typing bubble while it works
+      window.widget.onChatThought(({ text }) => {
+        if (!typing || !text) return
+        let t = typing.querySelector('.thought')
+        if (!t) {
+          t = document.createElement('span')
+          t.className = 'thought'
+          typing.insertBefore(t, typing.firstChild)
+        }
+        t.textContent = text
+        report()
+        stick()
+      })
 
       function typewrite(el, text) {
         el.textContent = ''
@@ -744,6 +783,14 @@
           typewrite(addBubble('bot tailed', ''), text)
           input.focus()
         }
+      })
+
+      window.widget.onChatNote(({ text, error }) => {
+        // the bot did something on this machine — log it without breaking
+        // the stream that's (probably) still coming
+        addBubble(error ? 'note bad' : 'note', text)
+        report()
+        stick()
       })
 
       window.widget.onChatError(({ text }) => {

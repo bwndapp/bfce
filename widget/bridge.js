@@ -4,6 +4,14 @@
 // one of them (cfg.incubator). Chat turns stream: conversation → text_delta*
 // → response (source of truth) → done. Close 1008 = key invalid/revoked:
 // stop reconnecting and wait for a new key. Unknown frame types are ignored.
+//
+// Desktop tools ride the same socket, in reverse. After hello the widget
+// announces what it can do here: `tools` {tools: [{name, description,
+// input_schema}]} (MCP tool shape; an empty list withdraws them). When the
+// bot's agent calls one, the server sends `tool_request` {id, name, input,
+// incubator_id?, conversation_id?}; the widget runs it locally and answers
+// `tool_result` {id, content: [{type:'text', text}], is_error?}. Requests
+// can land mid-turn or unprompted, and several may be in flight at once.
 
 const { EventEmitter } = require('events')
 let WebSocket = null
@@ -31,6 +39,8 @@ class Bridge extends EventEmitter {
     this.pinger = null
     this.user = null
     this.incubators = []
+    this.tools = [] // the desktop tool manifest, announced after every hello
+    this.toolsAnnouncedAt = 0 // last time the manifest went out on a live socket
     this.turn = null // the in-flight chat turn
     this.queue = []
     this.pendingHistory = [] // outstanding history requests
@@ -103,7 +113,11 @@ class Bridge extends EventEmitter {
       case 'hello':
         this.user = m.user || null
         this.incubators = standIns(m.incubators)
+        this.announceTools()
         this.emit('hello', { user: this.user, incubators: this.incubators })
+        break
+      case 'tool_request':
+        if (m.id != null && m.name) this.emit('tool', m)
         break
       case 'incubators':
         this.incubators = standIns(m.incubators)
@@ -116,6 +130,13 @@ class Bridge extends EventEmitter {
         break
       case 'text_delta':
         this.turn?.onEvent?.({ type: 'delta', content: m.content ?? '' })
+        break
+      case 'reasoning':
+        // the agent thinking out loud before it acts — usually right before a
+        // tool call. Inside a turn it rides the turn; outside (a DM being
+        // worked on) it's routed by incubator like a notification
+        if (this.turn) this.turn.onEvent?.({ type: 'reasoning', content: m.content ?? '' })
+        else this.emit('reasoning', { content: m.content ?? '', incubator_id: m.incubator_id })
         break
       case 'response':
         if (this.turn) this.turn.final = m.content ?? ''
@@ -261,6 +282,29 @@ class Bridge extends EventEmitter {
     if (next) this.start(next)
   }
 
+  // --- desktop tools ---
+  setTools(list) {
+    this.tools = Array.isArray(list) ? list : []
+    this.announceTools()
+  }
+  announceTools() {
+    if (this.status !== 'on' || !this.ws) return
+    try {
+      this.ws.send(JSON.stringify({ type: 'tools', tools: this.tools }))
+      this.toolsAnnouncedAt = this.tools.length ? Date.now() : 0
+      this.emit('tools-announced', this.toolsAnnouncedAt)
+    } catch {}
+  }
+  toolResult(id, result) {
+    if (this.status !== 'on' || !this.ws) return false
+    try {
+      this.ws.send(JSON.stringify({ type: 'tool_result', id, ...result }))
+      return true
+    } catch {
+      return false
+    }
+  }
+
   refreshBots() {
     if (this.status === 'on' && this.ws) {
       try {
@@ -285,6 +329,7 @@ class Bridge extends EventEmitter {
   }
 
   teardownSocket() {
+    this.toolsAnnouncedAt = 0 // a new socket has to hear the manifest again
     clearInterval(this.pinger)
     this.pinger = null
     if (this.ws) {

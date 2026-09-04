@@ -138,4 +138,33 @@ function inferMood(text) {
   return { mood: 'content' }
 }
 
-module.exports = { reply, inferMood }
+// the agent's reasoning, read for how it feels: what the face does while it
+// thinks, and a short gist for the thought cloud. Order matters — the most
+// specific tells come first
+const THOUGHTS = [
+  [/\b(oops|wait,? no|my mistake|wrong|i was wrong|actually,? no)\b/, 'confused', 'jitter'],
+  [/\b(not found|no luck|refused|can't see|cannot|failed|error|denied|outside the allowed)\b/, 'worried', null],
+  [/\b(there it is|found it|got it|perfect|exactly|that's the one|bingo)\b/, 'excited', 'pop'],
+  [/\b(interesting|odd|weird|strange|unexpected|huh|curious|suspicious)\b/, 'suspicious', null],
+  [/\b(hmm+|not sure|unclear|ambiguous|which one|could be)\b/, 'confused', null],
+  [/\b(search|find|look(ing)? (for|in|through)|scan|list|check|dig)\b/, 'curious', null],
+  [/\b(open|read|show|reveal)\b/, 'focus', null],
+  [/\b(let me|i'll|first|next|then|now i)\b/, 'focus', null],
+  [/\b(they want|user wants|asked for|asking)\b/, 'thinking', null],
+]
+const gistOf = (text) => {
+  const clean = String(text)
+    .replace(/[`*_#>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const first = clean.split(/(?<=[.!?])\s/)[0] || clean
+  const pick = first.length < 24 ? clean : first // a terse first sentence gets its follow-up
+  return pick.length > 64 ? pick.slice(0, 61).replace(/\s+\S*$/, '') + '…' : pick
+}
+function inferThought(text) {
+  const t = String(text).toLowerCase()
+  for (const [re, mood, react] of THOUGHTS) if (re.test(t)) return { mood, react, gist: gistOf(text) }
+  return { mood: 'thinking', react: null, gist: gistOf(text) }
+}
+
+module.exports = { reply, inferMood, inferThought }
